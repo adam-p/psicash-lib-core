@@ -31,6 +31,49 @@ TEST_F(TestUserData, InitFail)
     ASSERT_TRUE(err);
 }
 
+TEST_F(TestUserData, InitUpgrade)
+{
+    auto dsDir = GetTempDir();
+
+    // Write a v1 file.
+    auto ok = TempDir::Write(dsDir, dev, R"({"IsAccount":false,"authTokens":{"earner":"earnertoken","indicator":"indicatortoken","spender":"spendertoken"},"balance":125000000000,"lastTransactionID":"boosttransid","purchasePrices":[{"class":"speed-boost","distinguisher":"1hr","price":100000000000},{"class":"speed-boost","distinguisher":"2hr","price":200000000000},{"class":"speed-boost","distinguisher":"3hr","price":300000000000},{"class":"speed-boost","distinguisher":"4hr","price":400000000000},{"class":"speed-boost","distinguisher":"5hr","price":500000000000},{"class":"speed-boost","distinguisher":"6hr","price":600000000000},{"class":"speed-boost","distinguisher":"7hr","price":700000000000},{"class":"speed-boost","distinguisher":"8hr","price":800000000000},{"class":"speed-boost","distinguisher":"9hr","price":900000000000},{"class":"speed-boost","distinguisher":"24hr","price":800000000000}],"purchases":[{"authorization":{"AccessType":"speed-boost-test","Encoded":"boostauth","Expires":"2020-07-27T15:14:30.986Z","ID":"boostauthid"},"class":"speed-boost","distinguisher":"1hr","id":"boosttransid","localTimeExpiry":"2020-07-27T15:14:32.878Z","serverTimeExpiry":"2020-07-27T15:14:30.986Z"}],"requestMetadata":{"client_region":"CA","client_version":"999","propagation_channel_id":"ABCD1234","sponsor_id":"ABCD1234"},"serverTimeDiff":-2584,"v":1})");
+    ASSERT_TRUE(ok) << errno;
+
+    // Now load the file and upgrade
+    UserData ud;
+    auto err = ud.Init(dsDir.c_str(), dev);
+    ASSERT_FALSE(err);
+
+    ASSERT_GT(ud.GetInstanceID().length(), 0);
+    ASSERT_FALSE(ud.GetIsLoggedOutAccount());
+    ASSERT_EQ(ud.GetServerTimeDiff().count(), -2584);
+    auto auth_tokens = ud.GetAuthTokens();
+    ASSERT_EQ(auth_tokens.size(), 3);
+    ASSERT_EQ(auth_tokens["earner"], "earnertoken");
+    ASSERT_EQ(auth_tokens["indicator"], "indicatortoken");
+    ASSERT_EQ(auth_tokens["spender"], "spendertoken");
+    ASSERT_FALSE(ud.GetIsAccount());
+    ASSERT_EQ(ud.GetBalance(), 125000000000L);
+    ASSERT_EQ(ud.GetPurchasePrices().size(), 10);
+    ASSERT_EQ(ud.GetPurchases().size(), 1);
+    ASSERT_EQ(ud.GetLastTransactionID(), "boosttransid");
+    ASSERT_EQ(ud.GetRequestMetadata().size(), 4);
+}
+
+TEST_F(TestUserData, InitBadVersion)
+{
+    auto dsDir = GetTempDir();
+
+    // Write a datastore file with a bad (too future) version: 999999.
+    auto ok = TempDir::Write(dsDir, dev, R"({"IsAccount":false,"authTokens":{"earner":"earnertoken","indicator":"indicatortoken","spender":"spendertoken"},"balance":125000000000,"lastTransactionID":"boosttransid","purchasePrices":[{"class":"speed-boost","distinguisher":"1hr","price":100000000000},{"class":"speed-boost","distinguisher":"2hr","price":200000000000},{"class":"speed-boost","distinguisher":"3hr","price":300000000000},{"class":"speed-boost","distinguisher":"4hr","price":400000000000},{"class":"speed-boost","distinguisher":"5hr","price":500000000000},{"class":"speed-boost","distinguisher":"6hr","price":600000000000},{"class":"speed-boost","distinguisher":"7hr","price":700000000000},{"class":"speed-boost","distinguisher":"8hr","price":800000000000},{"class":"speed-boost","distinguisher":"9hr","price":900000000000},{"class":"speed-boost","distinguisher":"24hr","price":800000000000}],"purchases":[{"authorization":{"AccessType":"speed-boost-test","Encoded":"boostauth","Expires":"2020-07-27T15:14:30.986Z","ID":"boostauthid"},"class":"speed-boost","distinguisher":"1hr","id":"boosttransid","localTimeExpiry":"2020-07-27T15:14:32.878Z","serverTimeExpiry":"2020-07-27T15:14:30.986Z"}],"requestMetadata":{"client_region":"CA","client_version":"999","propagation_channel_id":"ABCD1234","sponsor_id":"ABCD1234"},"serverTimeDiff":-2584,"v":999999})");
+    ASSERT_TRUE(ok) << errno;
+
+    // Now load the file and upgrade
+    UserData ud;
+    auto err = ud.Init(dsDir.c_str(), dev);
+    ASSERT_TRUE(err);
+}
+
 TEST_F(TestUserData, Persistence)
 {
     auto want_server_time_diff_ms = 54321;
@@ -100,6 +143,55 @@ TEST_F(TestUserData, Persistence)
         auto got_request_metadata = ud.GetRequestMetadata();
         ASSERT_EQ(want_req_metadata_value, got_request_metadata[req_metadata_key]);
     }
+}
+
+TEST_F(TestUserData, GetInstanceID)
+{
+    UserData ud;
+    auto err = ud.Init(GetTempDir().c_str(), dev);
+    ASSERT_FALSE(err);
+
+    string prefix = "instanceid_";
+
+    auto v1 = ud.GetInstanceID();
+    ASSERT_EQ(v1.length(), prefix.length() + 48);
+    ASSERT_EQ(v1.substr(0, prefix.length()), prefix);
+
+    auto v1again = ud.GetInstanceID();
+    ASSERT_EQ(v1, v1again);
+
+    // Clear and expect to get a different ID
+
+    ud.Clear();
+
+    auto v2 = ud.GetInstanceID();
+    ASSERT_EQ(v2.length(), prefix.length() + 48);
+    ASSERT_EQ(v2.substr(0, prefix.length()), prefix);
+    ASSERT_NE(v1, v2);
+}
+
+TEST_F(TestUserData, IsLoggedOutAccount)
+{
+    UserData ud;
+    auto err = ud.Init(GetTempDir().c_str(), dev);
+    ASSERT_FALSE(err);
+
+    // Check default value
+    auto v = ud.GetIsLoggedOutAccount();
+    ASSERT_EQ(v, false);
+
+    // Set then get
+    bool want = true;
+    err = ud.SetIsLoggedOutAccount(want);
+    ASSERT_FALSE(err);
+    auto got = ud.GetIsLoggedOutAccount();
+    ASSERT_EQ(got, want);
+
+    want = false;
+    err = ud.SetIsLoggedOutAccount(want);
+    ASSERT_FALSE(err);
+    got = ud.GetIsLoggedOutAccount();
+    ASSERT_EQ(got, want);
 }
 
 TEST_F(TestUserData, ServerTimeDiff)

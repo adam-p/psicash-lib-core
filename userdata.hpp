@@ -29,7 +29,7 @@
 
 namespace psicash {
 
-extern const char* REQUEST_METADATA; // only for use in template method below
+extern const nlohmann::json::json_pointer kRequestMetadataPtr; // only for use in template method below
 
 using AuthTokens = std::map<std::string, std::string>;
 
@@ -56,17 +56,29 @@ public:
     error::Error Clear();
 
     /// Used to pause and result datastore file writing.
+    /// WritePausers can be nested -- inner instances will do nothing.
     class WritePauser {
     public:
-        WritePauser(UserData& user_data) : user_data_(
-                user_data) { user_data_.datastore_.PauseWrites(); };
-        ~WritePauser() { (void)Unpause(); } // TODO: Should dtor nuke changes (implying error)? Maybe param to ctor to indicate?
-        error::Error Unpause() { return user_data_.datastore_.UnpauseWrites(); }
+        WritePauser(UserData& user_data) : actually_paused_(false), user_data_(
+                user_data) { actually_paused_ = user_data_.datastore_.PauseWrites(); };
+        ~WritePauser() { if (actually_paused_) { (void)Rollback(); } }
+        error::Error Commit() { return Unpause(true); }
+        error::Error Rollback() { return Unpause(false); }
     private:
+        error::Error Unpause(bool commit) { if (actually_paused_) { return user_data_.datastore_.UnpauseWrites(commit); } else { return error::nullerr; } actually_paused_ = false; }
+        bool actually_paused_;
         UserData& user_data_;
     };
 
 public:
+    /// Deletes the stored user data and sets the isLoggedOutAccout flag.
+    error::Error DeleteUserData(bool isLoggedOutAccout);
+
+    std::string GetInstanceID() const;
+
+    bool GetIsLoggedOutAccount() const;
+    error::Error SetIsLoggedOutAccount(bool v);
+
     datetime::Duration GetServerTimeDiff() const;
     error::Error SetServerTimeDiff(const datetime::DateTime& serverTimeNow);
     /// Modifies the argument purchase.
@@ -99,9 +111,8 @@ public:
         if (key.empty()) {
             return error::MakeCriticalError("Metadata key cannot be empty");
         }
-        auto j = GetRequestMetadata();
-        j[key] = val;
-        return datastore_.Set({{REQUEST_METADATA, j}});
+        auto ptr = kRequestMetadataPtr / key;
+        return datastore_.Set(ptr, val);
     }
 
 protected:

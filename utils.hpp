@@ -51,6 +51,9 @@ std::string Stringer(const T& value, const Args& ... args) {
 /// Tests if the given filepath+name exists.
 bool FileExists(const std::string& filename);
 
+/// Generates a large random ID.
+std::string RandomID();
+
 }
 
 #endif //PSICASHLIB_UTILS_H

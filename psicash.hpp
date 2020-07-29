@@ -153,6 +153,7 @@ enum class Status {
     TransactionAmountMismatch,
     TransactionTypeNotFound,
     InvalidTokens,
+    InvalidCredentials,
     ServerError
 };
 
@@ -180,6 +181,10 @@ public:
     /// Resets the PsiCash datastore. Init() must be called after this method is used.
     /// Returns an error if the reset failed, likely indicating a filesystem problem.
     error::Error Reset(const std::string& file_store_root, bool test=false);
+
+    /// Resets PsiCash data for the current user (Tracker or Account). This will typically
+    /// be called when wanting to revert to a Tracker from a previously logged in Account.
+    error::Error ResetUser();
 
     /// Returns true if the library has been successfully initialized (i.e., Init called).
     bool Initialized() const;
@@ -270,18 +275,26 @@ public:
     //
 
     /**
-    Refreshes the client state. Retrieves info about whether the user has an
-    Account (vs Tracker), balance, valid token types, and purchase prices. After a
-    successful request, the retrieved values can be accessed with the accessor
-    methods.
+    Refreshes the client state. Retrieves info about whether the user has an Account (vs
+    Tracker), balance, valid token types, purchases, and purchase prices. After a
+    successful request, the retrieved values can be accessed with the accessor methods.
 
     If there are no tokens stored locally (e.g., if this is the first run), then
     new Tracker tokens will obtained.
 
-    If the user is/has an Account, then it is possible some tokens will be invalid
+    If the user has an Account, then it is possible some or all tokens will be invalid
     (they expire at different rates). Login may be necessary before spending, etc.
     (It's even possible that validTokenTypes is empty -- i.e., there are no valid
     tokens.)
+
+    If the user has an Account, then it is possible some or all tokens will be invalid
+    (they may expire at different rates) and multiple states are possible:
+      • spender, indicator, and earner tokens are all valid.
+      • Some token types are valid, while others are not. The client will probably want to
+        consider itself not-logged-in and force a login.
+      • No tokens are valid.
+
+    See the flow chart in the README for a graphical representation of states.
 
     If there is no valid indicator token, then balance and purchase prices will not
     be retrieved, but there may be stored (possibly stale) values that can be used.
@@ -305,8 +318,8 @@ public:
     • ServerError: The server returned 500 error response. Note that the request has
       already been retried internally and any further retry should not be immediate.
 
-    • InvalidTokens: Should never happen (indicates something like
-      local storage corruption). The local user state will be cleared.
+    • InvalidTokens: Should never happen (indicates something like local storage
+      corruption). The local user state will be cleared.
     */
     error::Result<Status> RefreshState(const std::vector<std::string>& purchase_classes);
 
@@ -349,8 +362,9 @@ public:
       could not be found. The price list should be updated immediately, but it might also
       indicate an out-of-date app.
 
-    • InvalidTokens: The current auth tokens are invalid.
-      TODO: Figure out how to handle this. It shouldn't be a factor for Trackers or MVP.
+    • InvalidTokens: The current auth tokens are invalid. This indicates something is
+      very wrong, such as the tokens belonging to different users. This state requires
+      a full reset.
 
     • ServerError: An error occurred on the server. Probably report to the user and try
       again later. Note that the request has already been retried internally and any
@@ -365,6 +379,54 @@ public:
             const std::string& transaction_class,
             const std::string& distinguisher,
             const int64_t expected_price);
+
+    /**
+    Logs out a currently logged-in account.
+    An error will be returned in these cases:
+    • If the user is not an account
+    • If the request to the server fails
+    • If the local datastore cannot be updated
+    These errors should always be logged, but the local state may end up being logged out,
+    even if they do occur -- such as when the server request fails -- so checks for state
+    will need to occur.
+    NOTE: This (usually) does involve a network operation, so wrappers may want to be
+    asynchronous.
+    */
+    error::Error AccountLogout();
+
+    /**
+    Attempts to log the current user into an account. Will attempt to merge any available
+    Tracker balance.
+
+    If success, RefreshState should be called immediately afterward.
+
+    Input parameters:
+    • utf8_username: The username, encoded in UTF-8.
+    • utf8_password: The password, encoded in UTF-8.
+
+    Result fields:
+    • error: If set, the request failed utterly and no other params are valid.
+    • status: Request success indicator. See below for possible values.
+    • last_tracker_merge: If true, a Tracker was merged into the account, and this was
+      the last such merge that is allowed -- the user should be informed of this.
+
+    Possible status codes:
+    • Success: The credentials were correct and the login request was successful. There
+      are tokens available for future requests.
+    • InvalidCredentials: One or both of the username and password did not match a known
+      Account.
+    • ServerError: An error occurred on the server. Probably report to the user and try
+      again later. Note that the request has already been retried internally and any
+      further retry should not be immediate.
+    */
+    struct AccountLoginResponse {
+        Status status;
+        nonstd::optional<bool> last_tracker_merge;
+    };
+
+    error::Result<AccountLoginResponse> AccountLogin(
+            const std::string& utf8_username,
+            const std::string& utf8_password);
 
 protected:
     // See implementation for descriptions of non-public methods.
@@ -384,6 +446,8 @@ protected:
     error::Result<Status>
     RefreshState(const std::vector<std::string>& purchase_classes, bool allow_recursion);
 
+    error::Result<psicash::Purchase> PurchaseFromJSON(const nlohmann::json& j) const;
+
 protected:
     bool test_;
     bool initialized_;
@@ -391,7 +455,7 @@ protected:
     std::string server_scheme_;
     std::string server_hostname_;
     int server_port_;
-    // This is a pointer rather than an instance to avoid including userdata.h (TODO: worthwhile?)
+    // This is a pointer rather than an instance to avoid including userdata.h
     std::unique_ptr<UserData> user_data_;
     MakeHTTPRequestFn make_http_request_fn_;
 };

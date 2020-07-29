@@ -46,7 +46,7 @@ class TestPsiCash : public ::testing::Test, public TempDir {
                 curl << "&";
             }
 
-            curl << it->first << "=" << it->second;
+            curl << it->first << "=" << URL::Encode(it->second, false);
         }
         curl << '"';
 
@@ -711,14 +711,55 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     URL url_in, url_out;
 
     //
-    // No metadata set
+    // No tokens (error)
     //
-
-    auto encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":null,"v":1})")));
 
     url_in = {"https://asdf.sadf.gf", "", ""};
     auto res = pc.ModifyLandingPage(url_in.ToString());
+    ASSERT_FALSE(res);
+
+    //
+    // Add tokens
+    //
+
+    // Some tokens, but no earner token (different code path)
+    AuthTokens auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
+                              {kIndicatorTokenType, "kIndicatorTokenType"}};
+    err = pc.user_data().SetAuthTokens(auth_tokens, false);
+    ASSERT_FALSE(err);
+    url_in = {"https://asdf.sadf.gf", "", ""};
+    res = pc.ModifyLandingPage(url_in.ToString());
     ASSERT_TRUE(res);
+    url_out.Parse(*res);
+    ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
+    ASSERT_EQ(url_out.query_, url_in.query_);
+    auto encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":null,"v":1})")));
+    ASSERT_EQ(url_out.fragment_, "!"s + key_part + encoded_data);
+
+    // All tokens
+    auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
+                   {kEarnerTokenType, "kEarnerTokenType"},
+                   {kIndicatorTokenType, "kIndicatorTokenType"}};
+    err = pc.user_data().SetAuthTokens(auth_tokens, false);
+    ASSERT_FALSE(err);
+    url_in = {"https://asdf.sadf.gf", "", ""};
+    res = pc.ModifyLandingPage(url_in.ToString());
+    ASSERT_TRUE(res);
+    url_out.Parse(*res);
+    ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
+    ASSERT_EQ(url_out.query_, url_in.query_);
+    encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":"kEarnerTokenType","v":1})")));
+    ASSERT_EQ(url_out.fragment_, "!"s + key_part + encoded_data);
+
+    //
+    // No metadata set
+    //
+
+    encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":"kEarnerTokenType","v":1})")));
+
+    url_in = {"https://asdf.sadf.gf", "", ""};
+    res = pc.ModifyLandingPage(url_in.ToString());
+    ASSERT_TRUE(res) << res.error();
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
     ASSERT_EQ(url_out.query_, url_in.query_);
@@ -782,37 +823,7 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
     ASSERT_EQ(url_out.query_, url_in.query_);
-    encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"k":"v","user_agent":")", user_agent_, R"(","v":1},"tokens":null,"v":1})")));
-    ASSERT_EQ(url_out.fragment_, "!"s + key_part + encoded_data);
-
-    // With tokens
-
-    AuthTokens auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
-                              {kEarnerTokenType, "kEarnerTokenType"},
-                              {kIndicatorTokenType, "kIndicatorTokenType"}};
-    err = pc.user_data().SetAuthTokens(auth_tokens, false);
-    ASSERT_FALSE(err);
-    url_in = {"https://asdf.sadf.gf", "", ""};
-    res = pc.ModifyLandingPage(url_in.ToString());
-    ASSERT_TRUE(res);
-    url_out.Parse(*res);
-    ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
-    ASSERT_EQ(url_out.query_, url_in.query_);
     encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"k":"v","user_agent":")", user_agent_, R"(","v":1},"tokens":"kEarnerTokenType","v":1})")));
-    ASSERT_EQ(url_out.fragment_, "!"s + key_part + encoded_data);
-
-    // Some tokens, but no earner token (different code path)
-    auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
-                   {kIndicatorTokenType, "kIndicatorTokenType"}};
-    err = pc.user_data().SetAuthTokens(auth_tokens, false);
-    ASSERT_FALSE(err);
-    url_in = {"https://asdf.sadf.gf", "", ""};
-    res = pc.ModifyLandingPage(url_in.ToString());
-    ASSERT_TRUE(res);
-    url_out.Parse(*res);
-    ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
-    ASSERT_EQ(url_out.query_, url_in.query_);
-    encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"k":"v","user_agent":")", user_agent_, R"(","v":1},"tokens":null,"v":1})")));
     ASSERT_EQ(url_out.fragment_, "!"s + key_part + encoded_data);
 
     //
@@ -859,6 +870,7 @@ TEST_F(TestPsiCash, GetDiagnosticInfo) {
         auto want = R"|({
         "balance":0,
         "isAccount":false,
+        "isLoggedOutAccount":false,
         "purchasePrices":[],
         "purchases":[],
         "serverTimeDiff":0,
@@ -878,6 +890,7 @@ TEST_F(TestPsiCash, GetDiagnosticInfo) {
         auto want = R"|({
         "balance":0,
         "isAccount":false,
+        "isLoggedOutAccount":false,
         "purchasePrices":[],
         "purchases":[],
         "serverTimeDiff":0,
@@ -896,11 +909,26 @@ TEST_F(TestPsiCash, GetDiagnosticInfo) {
         want = R"|({
         "balance":12345,
         "isAccount":true,
+        "isLoggedOutAccount":false,
         "purchasePrices":[{"distinguisher":"d1","price":123,"class":"tc1"},{"distinguisher":"d2","price":321,"class":"tc2"}],
         "purchases":[{"class":"tc2","distinguisher":"d2"}],
         "serverTimeDiff":0,
         "test":true,
         "validTokenTypes":["a","b","c"]
+        })|"_json;
+        j = pc.GetDiagnosticInfo();
+        ASSERT_EQ(j, want);
+
+        pc.user_data().DeleteUserData(/*is_logged_out_account=*/true);
+        want = R"|({
+        "balance":0,
+        "isAccount":true,
+        "isLoggedOutAccount":true,
+        "purchasePrices":[],
+        "purchases":[],
+        "serverTimeDiff":0,
+        "test":true,
+        "validTokenTypes":[]
         })|"_json;
         j = pc.GetDiagnosticInfo();
         ASSERT_EQ(j, want);
@@ -918,7 +946,7 @@ TEST_F(TestPsiCash, RefreshState) {
     // Basic NewTracker success
     auto res = pc.RefreshState({"speed-boost"});
     ASSERT_TRUE(res) << res.error();
-    ASSERT_EQ(*res, Status::Success);
+    ASSERT_EQ(*res, Status::Success) << (int)*res;
     ASSERT_FALSE(pc.IsAccount());
     ASSERT_GE(pc.ValidTokenTypes().size(), 3);
     ASSERT_THAT(pc.Balance(), AllOf(Ge(0), Le(MAX_STARTING_BALANCE)));
@@ -980,29 +1008,89 @@ TEST_F(TestPsiCash, RefreshState) {
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(*res, Status::Success);
     ASSERT_EQ(pc.Balance(), starting_balance + ONE_TRILLION);
+}
+
+TEST_F(TestPsiCash, RefreshStateAccount) {
+    PsiCashTester pc;
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester);
+    ASSERT_FALSE(err);
 
     // Test bad is-account state. This is a local sanity check failure that will occur
-    // after the request to the server sees an illegal is-account state.
+    // after the request to the server sees an illegal is-account state. It should
+    // result in a local data reset.
     pc.user_data().Clear();
-    res = pc.RefreshState({});
-    ASSERT_TRUE(res) << res.error();
-    ASSERT_EQ(*res, Status::Success);
+    auto res_refresh = pc.RefreshState({"speed-boost"});
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(*res_refresh, Status::Success);
     // We're setting "isAccount" with tracker tokens. This is not okay and shouldn't happen.
     pc.user_data().SetIsAccount(true);
-    res = pc.RefreshState({});
-    ASSERT_FALSE(res) << res.error();
+    res_refresh = pc.RefreshState({});
+    ASSERT_FALSE(res_refresh);
 
     // Test is-account with no tokens
     pc.user_data().Clear();                 // blow away existing tokens
     pc.user_data().SetIsAccount(true);      // force is-account
-    res = pc.RefreshState({"speed-boost"}); // ask for purchase prices
-    ASSERT_TRUE(res) << res.error();
-    ASSERT_EQ(*res, Status::Success);
+    res_refresh = pc.RefreshState({"speed-boost"});
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(*res_refresh, Status::Success);
     ASSERT_TRUE(pc.IsAccount());               // should still be is-account
     ASSERT_EQ(pc.ValidTokenTypes().size(), 0); // but no tokens
-    ASSERT_THAT(pc.Balance(), AllOf(Ge(0), Le(MAX_STARTING_BALANCE)));
-    ASSERT_EQ(pc.GetPurchasePrices().size(),
-              0); // shouldn't get any, because no valid indicator token
+    ASSERT_EQ(pc.Balance(), 0);
+    ASSERT_EQ(pc.GetPurchasePrices().size(), 0); // shouldn't get any, because no valid indicator token
+
+    // Successful login and refresh
+    auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+    ASSERT_TRUE(res_login) << res_login.error();
+    ASSERT_EQ(res_login->status, Status::Success);
+    ASSERT_FALSE(res_login->last_tracker_merge);
+
+    res_refresh = pc.RefreshState({"speed-boost"});
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(*res_refresh, Status::Success);
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_GE(pc.ValidTokenTypes().size(), 3);
+    ASSERT_GT(pc.Balance(), 0); // Our test accounts don't have zero balance
+    ASSERT_GT(pc.GetPurchasePrices().size(), 0);
+
+    // Log out and try to refresh
+    err = pc.AccountLogout();
+    ASSERT_FALSE(err);
+    ASSERT_TRUE(pc.IsAccount());               // should still be is-account
+    ASSERT_EQ(pc.ValidTokenTypes().size(), 0);
+    res_refresh = pc.RefreshState({"speed-boost"});
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(*res_refresh, Status::Success);
+    ASSERT_TRUE(pc.IsAccount());               // should still be is-account
+    ASSERT_EQ(pc.ValidTokenTypes().size(), 0); // but no tokens
+    ASSERT_EQ(pc.Balance(), 0);
+    ASSERT_EQ(pc.GetPurchasePrices().size(), 0); // shouldn't get any, because no valid indicator token
+
+    // Force invalid tokens, forcing logged-out state
+    if (pc.MutatorsEnabled()) {
+        // Successful login and refresh
+        auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+        ASSERT_TRUE(res_login);
+        ASSERT_EQ(res_login->status, Status::Success);
+        ASSERT_FALSE(res_login->last_tracker_merge);
+
+        res_refresh = pc.RefreshState({"speed-boost"});
+        ASSERT_TRUE(res_refresh) << res_refresh.error();
+        ASSERT_EQ(*res_refresh, Status::Success);
+        ASSERT_TRUE(pc.IsAccount());
+        ASSERT_GE(pc.ValidTokenTypes().size(), 3);
+        ASSERT_GT(pc.Balance(), 0); // Our test accounts don't have zero balance
+        ASSERT_GT(pc.GetPurchasePrices().size(), 0);
+
+        // Try again with invalid tokens
+        pc.SetRequestMutators({"InvalidTokens"});
+        res_refresh = pc.RefreshState({"speed-boost"});
+        ASSERT_TRUE(res_refresh) << res_refresh.error();
+        ASSERT_EQ(*res_refresh, Status::Success);
+        ASSERT_TRUE(pc.IsAccount());               // should still be is-account
+        ASSERT_EQ(pc.ValidTokenTypes().size(), 0); // but no tokens
+        ASSERT_EQ(pc.Balance(), 0);
+        ASSERT_EQ(pc.GetPurchasePrices().size(), 0); // shouldn't get any, because no valid indicator token
+    }
 }
 
 TEST_F(TestPsiCash, RefreshStateMutators) {
@@ -1434,6 +1522,24 @@ TEST_F(TestPsiCash, NewExpiringPurchase) {
     purchase_result = pc.NewExpiringPurchase(TEST_DEBIT_TRANSACTION_CLASS, "invalid-distinguisher", ONE_TRILLION);
     ASSERT_TRUE(purchase_result);
     ASSERT_EQ(purchase_result->status, Status::TransactionTypeNotFound) << static_cast<int>(purchase_result->status);
+
+    // Using an account
+    auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::Success);
+    refresh_result = pc.RefreshState({});
+    ASSERT_TRUE(refresh_result);
+    ASSERT_TRUE(pc.IsAccount());
+    initial_balance = pc.Balance();
+    err = MAKE_1T_REWARD(pc, 1);
+    ASSERT_FALSE(err) << err;
+    refresh_result = pc.RefreshState({});
+    ASSERT_TRUE(refresh_result);
+    ASSERT_EQ(pc.Balance(), initial_balance + ONE_TRILLION);
+    purchase_result = pc.NewExpiringPurchase(TEST_DEBIT_TRANSACTION_CLASS, TEST_ONE_TRILLION_ONE_SECOND_DISTINGUISHER, ONE_TRILLION);
+    ASSERT_TRUE(purchase_result);
+    ASSERT_EQ(purchase_result->status, Status::Success);
+    ASSERT_EQ(pc.Balance(), initial_balance);
 }
 
 TEST_F(TestPsiCash, NewExpiringPurchaseMutators) {
@@ -1514,4 +1620,335 @@ TEST_F(TestPsiCash, HTTPRequestBadResult) {
     auto refresh_result = pc.RefreshState({});
     ASSERT_FALSE(refresh_result);
     ASSERT_NE(refresh_result.error().ToString().find(want_error_message), string::npos);
+}
+
+TEST_F(TestPsiCash, LoginSimple) {
+    // The initial internal release doesn't have Logout, so the tests need to be constrained.
+
+    PsiCashTester pc;
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester);
+    ASSERT_FALSE(err);
+
+    // Bad username
+    auto rand = utils::RandomID(); // ensure we don't match a real user
+    auto res_login = pc.AccountLogin(rand, "this is a bad password");
+    ASSERT_TRUE(res_login) << res_login.error();
+    ASSERT_EQ(res_login->status, Status::InvalidCredentials);
+    ASSERT_FALSE(pc.IsAccount());
+    ASSERT_TRUE(pc.ValidTokenTypes().empty());
+
+    // Good username, bad password
+    res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, "this is a bad password");
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::InvalidCredentials);
+    ASSERT_FALSE(pc.IsAccount());
+    ASSERT_TRUE(pc.ValidTokenTypes().empty());
+
+    // Good credentials
+    res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::Success);
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_EQ(pc.ValidTokenTypes().size(), 3);
+    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
+    ASSERT_EQ(pc.Balance(), 0); // we haven't called RefreshState yet
+    auto prev_earner_token = pc.user_data().GetAuthTokens()["earner"];
+
+    auto res_refresh = pc.RefreshState({});
+    ASSERT_TRUE(res_refresh);
+    ASSERT_GT(pc.Balance(), 0); // Our test accounts don't have zero balance
+
+    // Try to log in again with bad creds
+    res_login = pc.AccountLogin(rand, "this is a bad password");
+    ASSERT_TRUE(res_login) << res_login.error();
+    ASSERT_EQ(res_login->status, Status::InvalidCredentials);
+    // Login state should not have changed
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_EQ(pc.ValidTokenTypes().size(), 3);
+    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
+
+    // Good username, bad password
+    res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, "this is a bad password");
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::InvalidCredentials);
+    // Login state should not have changed
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_EQ(pc.ValidTokenTypes().size(), 3);
+    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
+
+    // Log in again with the same account
+    res_login = pc.AccountLogin(TEST_ACCOUNT_TWO_USERNAME, TEST_ACCOUNT_TWO_PASSWORD);
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::Success);
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_EQ(pc.ValidTokenTypes().size(), 3);
+    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
+    ASSERT_NE(pc.user_data().GetAuthTokens()["earner"], prev_earner_token); // should get a different token
+    ASSERT_EQ(pc.Balance(), 0); // we haven't yet done a RefreshState
+
+    // Different account, good credentials
+    res_login = pc.AccountLogin(TEST_ACCOUNT_TWO_USERNAME, TEST_ACCOUNT_TWO_PASSWORD);
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::Success);
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_EQ(pc.ValidTokenTypes().size(), 3);
+    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
+    ASSERT_NE(pc.user_data().GetAuthTokens()["earner"], prev_earner_token);
+    ASSERT_EQ(pc.Balance(), 0); // we haven't yet done a RefreshState
+
+    res_refresh = pc.RefreshState({});
+    ASSERT_TRUE(res_refresh);
+    ASSERT_GT(pc.Balance(), 0); // Our test accounts don't have zero balance
+}
+
+TEST_F(TestPsiCash, LoginMerge) {
+    PsiCashTester pc;
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester);
+    ASSERT_FALSE(err);
+
+    auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::Success);
+    ASSERT_FALSE(res_login->last_tracker_merge);
+
+    auto starting_balance = pc.Balance();
+
+    // Log out and reset so we can get a tracker
+    err = pc.AccountLogout();
+    ASSERT_FALSE(err);
+    err = pc.ResetUser();
+    ASSERT_FALSE(err);
+
+    // Get a new tracker
+    auto res_refresh = pc.RefreshState({});
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(*res_refresh, Status::Success);
+    ASSERT_FALSE(pc.IsAccount());
+    ASSERT_GE(pc.ValidTokenTypes().size(), 3);
+    ASSERT_THAT(pc.Balance(), AllOf(Ge(0), Le(MAX_STARTING_BALANCE)));
+
+    auto expected_balance = starting_balance + pc.Balance();
+
+    // Log in, with merge
+    res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::Success);
+    ASSERT_TRUE(res_login->last_tracker_merge);
+    ASSERT_FALSE(*res_login->last_tracker_merge); // this tracker has near-infinite merges
+    ASSERT_EQ(pc.Balance(), expected_balance);
+
+    // Force a "last tracker merge"
+    if (pc.MutatorsEnabled()) {
+        starting_balance = pc.Balance();
+
+        // Log out and reset so we can get a tracker
+        err = pc.AccountLogout();
+        ASSERT_FALSE(err);
+        err = pc.ResetUser();
+        ASSERT_FALSE(err);
+
+        // Get a new tracker
+        res_refresh = pc.RefreshState({});
+        ASSERT_TRUE(res_refresh) << res_refresh.error();
+        ASSERT_EQ(*res_refresh, Status::Success);
+        ASSERT_FALSE(pc.IsAccount());
+        ASSERT_GE(pc.ValidTokenTypes().size(), 3);
+        ASSERT_THAT(pc.Balance(), AllOf(Ge(0), Le(MAX_STARTING_BALANCE)));
+
+        expected_balance = starting_balance + pc.Balance();
+
+        // Log in, with merge and mutator to force "last tracker merge"
+        pc.SetRequestMutators({"EditBody:response;TrackerMergesRemaining=0"});
+        res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+        ASSERT_TRUE(res_login);
+        ASSERT_EQ(res_login->status, Status::Success);
+        ASSERT_TRUE(res_login->last_tracker_merge);
+        ASSERT_TRUE(*res_login->last_tracker_merge); // forced
+        ASSERT_EQ(pc.Balance(), expected_balance);
+    }
+
+    // Force invalid tracker tokens to merge
+    if (pc.MutatorsEnabled()) {
+        starting_balance = pc.Balance();
+
+        // Log out and reset so we can get a tracker
+        err = pc.AccountLogout();
+        ASSERT_FALSE(err);
+        err = pc.ResetUser();
+        ASSERT_FALSE(err);
+
+        // Get a new tracker
+        res_refresh = pc.RefreshState({});
+        ASSERT_TRUE(res_refresh) << res_refresh.error();
+        ASSERT_EQ(*res_refresh, Status::Success);
+        ASSERT_FALSE(pc.IsAccount());
+        ASSERT_GE(pc.ValidTokenTypes().size(), 3);
+        ASSERT_THAT(pc.Balance(), AllOf(Ge(0), Le(MAX_STARTING_BALANCE)));
+
+        expected_balance = starting_balance; // should be no change, as merge will fail
+
+        // Log in, forcing tracker tokens to be invalid
+        pc.SetRequestMutators({"InvalidTokens"});
+        res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+        ASSERT_TRUE(res_login);
+        ASSERT_EQ(res_login->status, Status::Success);
+        ASSERT_TRUE(res_login->last_tracker_merge);
+        ASSERT_FALSE(*res_login->last_tracker_merge);
+        ASSERT_EQ(pc.Balance(), expected_balance);
+    }
+}
+
+TEST_F(TestPsiCash, Logout) {
+    // This also tests the combination of logging in and out
+
+    PsiCashTester pc;
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester);
+    ASSERT_FALSE(err);
+
+    // The instance ID should not change throughout this
+    auto instance_id = pc.user_data().GetInstanceID();
+
+    // Try to log out before logging in
+    err = pc.AccountLogout();
+    ASSERT_TRUE(err);
+    ASSERT_FALSE(pc.IsAccount());
+    ASSERT_TRUE(pc.ValidTokenTypes().empty());
+    ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
+
+    // RefreshState to get a tracker and try to log out again
+    auto res_refresh = pc.RefreshState({});
+    ASSERT_TRUE(res_refresh);
+    ASSERT_EQ(pc.ValidTokenTypes().size(), 3);
+    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
+    ASSERT_FALSE(pc.IsAccount());
+    ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
+
+    err = pc.AccountLogout();
+    ASSERT_TRUE(err); // fails and has no effect
+    ASSERT_EQ(pc.ValidTokenTypes().size(), 3);
+    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
+    ASSERT_FALSE(pc.IsAccount());
+    ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
+
+    // Log in with good credentials
+    auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::Success);
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_GE(pc.ValidTokenTypes().size(), 3);
+    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
+    ASSERT_EQ(pc.Balance(), 0); // we haven't called RefreshState yet
+    ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
+    auto prev_earner_token = pc.user_data().GetAuthTokens()["earner"];
+
+    res_refresh = pc.RefreshState({});
+    ASSERT_TRUE(res_refresh);
+    ASSERT_GT(pc.Balance(), 0); // Our test accounts don't have zero balance
+    ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
+
+    err = pc.AccountLogout();
+    ASSERT_FALSE(err);
+    // This is the state we should be in after a logout
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_TRUE(pc.ValidTokenTypes().empty());
+    ASSERT_EQ(pc.Balance(), 0);
+    ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
+
+    // We're in the was-account-logged-in state. Try to log out again.
+    err = pc.AccountLogout();
+    ASSERT_TRUE(err); // should fail
+    // No change to this state
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_TRUE(pc.ValidTokenTypes().empty());
+    ASSERT_EQ(pc.Balance(), 0);
+    ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
+
+    // Log in again with the same user
+    res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::Success);
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_GE(pc.ValidTokenTypes().size(), 3);
+    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
+    ASSERT_EQ(pc.Balance(), 0); // we haven't called RefreshState yet
+    ASSERT_NE(pc.user_data().GetAuthTokens()["earner"], prev_earner_token); // different token
+    ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
+    prev_earner_token = pc.user_data().GetAuthTokens()["earner"];
+
+    // Log out, reset, log in with a different user (without first getting a new tracker)
+    err = pc.AccountLogout();
+    ASSERT_FALSE(err);
+    // This is the state we should be in after a logout
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_TRUE(pc.ValidTokenTypes().empty());
+    ASSERT_EQ(pc.Balance(), 0);
+    ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
+
+    err = pc.ResetUser();
+    ASSERT_FALSE(err);
+    ASSERT_FALSE(pc.IsAccount());
+    ASSERT_TRUE(pc.ValidTokenTypes().empty());
+    ASSERT_EQ(pc.Balance(), 0);
+    ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
+
+    // Log in with a different user
+    res_login = pc.AccountLogin(TEST_ACCOUNT_TWO_USERNAME, TEST_ACCOUNT_TWO_PASSWORD);
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::Success);
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_GE(pc.ValidTokenTypes().size(), 3);
+    ASSERT_NE(pc.user_data().GetAuthTokens()["earner"], prev_earner_token); // different token
+    ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
+
+    err = pc.AccountLogout();
+    ASSERT_FALSE(err);
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_TRUE(pc.ValidTokenTypes().empty());
+    ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
+
+    err = pc.ResetUser();
+    ASSERT_FALSE(err);
+    ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
+
+    // Should be back to not being an account
+    ASSERT_FALSE(pc.IsAccount());
+    ASSERT_TRUE(pc.ValidTokenTypes().empty());
+
+    // Ensure we can log in again
+    res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::Success);
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_GE(pc.ValidTokenTypes().size(), 3);
+    ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
+
+    err = pc.AccountLogout();
+    ASSERT_FALSE(err);
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_TRUE(pc.ValidTokenTypes().empty());
+    ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
+
+    // Logging out twice is an error
+    err = pc.AccountLogout();
+    ASSERT_TRUE(err);
+    ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
+
+    // Test logging out with invalid tokens.
+    if (pc.MutatorsEnabled()) {
+        // First log in normally.
+        res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+        ASSERT_TRUE(res_login);
+        ASSERT_EQ(res_login->status, Status::Success);
+        ASSERT_TRUE(pc.IsAccount());
+        ASSERT_GE(pc.ValidTokenTypes().size(), 3);
+        ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
+        // Then log out with invalid tokens. It should succeed even though nothing was done
+        // server-side, and have nuked our local state.
+        pc.SetRequestMutators({"InvalidTokens"});
+        err = pc.AccountLogout();
+        ASSERT_FALSE(err);
+        ASSERT_TRUE(pc.IsAccount());
+        ASSERT_TRUE(pc.ValidTokenTypes().empty());
+        ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
+    }
 }
