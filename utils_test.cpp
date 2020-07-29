@@ -16,3 +16,8 @@ TEST(TestStringer, MultiValue) {
   auto s = Stringer("one", 2, "three", 4, '5', '!');
   ASSERT_EQ(s, "one2three45!");
 }
+
+TEST(TestRandomID, Simple) {
+  auto s = RandomID();
+  ASSERT_EQ(s.length(), 48);
+}

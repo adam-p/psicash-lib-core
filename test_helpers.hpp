@@ -7,6 +7,8 @@
 #include <ctime>
 #include <cctype>
 #include <algorithm>
+#include <iostream>
+#include <fstream>
 #include "gtest/gtest.h"
 
 class TempDir
@@ -61,11 +63,31 @@ class TempDir
         return res;
     }
 
-    void WriteBadData(const std::string& datastore_root, const std::string& suffix)
+    std::string GetSuffix(bool dev) {
+        return dev ? ".dev" : ".prod";
+    }
+
+    std::string DatastoreFilepath(const std::string& datastore_root, bool dev) {
+        return datastore_root + "/psicashdatastore" + GetSuffix(dev);
+    }
+
+    bool Write(const std::string& datastore_root, bool dev, const std::string& s) {
+        auto ds_file = DatastoreFilepath(datastore_root, dev);
+        std::ofstream f;
+        f.open(ds_file, std::ios::out | std::ios::trunc | std::ios::binary);
+        if (!f.is_open()) {
+            return false;
+        }
+        f << s;
+        f.close();
+        return true;
+    }
+
+    bool WriteBadData(const std::string& datastore_root, bool dev)
     {
-        auto ds_file = datastore_root + "/psicashdatastore" + suffix;
+        auto ds_file = DatastoreFilepath(datastore_root, dev);
         auto make_bad_file = "echo nonsense > " + ds_file;
-        system(make_bad_file.c_str());
+        return Write(datastore_root, dev, "this is bad data");
     }
 };
 
