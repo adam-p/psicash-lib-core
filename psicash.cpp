@@ -56,9 +56,11 @@ static constexpr const char* kAPIServerHostname = "api.psi.cash";
 static constexpr int kAPIServerPort = 443;
 }
 namespace dev {
+//*
 static constexpr const char* kAPIServerScheme = "https";
 static constexpr const char* kAPIServerHostname = "dev-api.psi.cash";
 static constexpr int kAPIServerPort = 443;
+//*/
 /*
 static constexpr const char* kAPIServerScheme = "http";
 static constexpr const char* kAPIServerHostname = "localhost";
@@ -294,8 +296,6 @@ error::Result<Purchases> PsiCash::RemovePurchases(const vector<TransactionID>& i
 }
 
 Result<string> PsiCash::ModifyLandingPage(const string& url_string) const {
-    TOKENS_REQUIRED;
-
     URL url;
     auto err = url.Parse(url_string);
     if (err) {
@@ -451,10 +451,22 @@ json PsiCash::GetRequestMetadata(int attempt) const {
 // HTTPResult.error will always be empty on a non-error return.
 Result<HTTPResult> PsiCash::MakeHTTPRequestWithRetry(
         const std::string& method, const std::string& path, bool include_auth_tokens,
-        const std::vector<std::pair<std::string, std::string>>& query_params)
+        const std::vector<std::pair<std::string, std::string>>& query_params,
+        const optional<json>& body)
 {
     if (!make_http_request_fn_) {
         throw std::runtime_error("make_http_request_fn_ must be set before requests are attempted");
+    }
+
+    string body_string;
+    if (body) {
+        try {
+            body_string = (*body).dump(-1, ' ', true);
+        }
+        catch (json::exception& e) {
+            return MakeCriticalError(
+                    utils::Stringer("body json dump failed: ", e.what(), "; id:", e.id));
+        }
     }
 
     const int max_attempts = 3;
@@ -467,7 +479,7 @@ Result<HTTPResult> PsiCash::MakeHTTPRequestWithRetry(
         }
 
         auto req_params = BuildRequestParams(
-            method, path, include_auth_tokens, query_params, i + 1, {});
+            method, path, include_auth_tokens, query_params, i + 1, {}, body_string);
         if (!req_params) {
             return WrapError(req_params.error(), "BuildRequestParams failed");
         }
@@ -515,7 +527,8 @@ Result<HTTPResult> PsiCash::MakeHTTPRequestWithRetry(
 Result<HTTPParams> PsiCash::BuildRequestParams(
         const std::string& method, const std::string& path, bool include_auth_tokens,
         const std::vector<std::pair<std::string, std::string>>& query_params, int attempt,
-        const std::map<std::string, std::string>& additional_headers) const {
+        const std::map<std::string, std::string>& additional_headers,
+        const std::string& body) const {
 
     HTTPParams params;
 
@@ -530,14 +543,7 @@ Result<HTTPParams> PsiCash::BuildRequestParams(
     params.headers["User-Agent"] = user_agent_;
 
     if (include_auth_tokens) {
-        string s;
-        for (const auto& at : user_data_->GetAuthTokens()) {
-            if (!s.empty()) {
-                s += ",";
-            }
-            s += at.second;
-        }
-        params.headers["X-PsiCash-Auth"] = s;
+        params.headers["X-PsiCash-Auth"] = CommaDelimitTokens();
     }
 
     auto metadata = GetRequestMetadata(attempt);
@@ -550,7 +556,23 @@ Result<HTTPParams> PsiCash::BuildRequestParams(
                 utils::Stringer("metadata json dump failed: ", e.what(), "; id:", e.id));
     }
 
+    params.body = body;
+    if (!body.empty()) {
+        params.headers["Content-Type"] = "application/json";
+    }
+
     return params;
+}
+
+std::string PsiCash::CommaDelimitTokens() const {
+    string s;
+    for (const auto& at : user_data_->GetAuthTokens()) {
+        if (!s.empty()) {
+            s += ",";
+        }
+        s += at.second;
+    }
+    return s;
 }
 
 // Get new tracker tokens from the server. This effectively gives us a new identity.
@@ -561,7 +583,8 @@ Result<Status> PsiCash::NewTracker() {
             kMethodPOST,
             "/tracker",
             false,
-            {{"instanceID", user_data_->GetInstanceID()}}
+            {{"instanceID", user_data_->GetInstanceID()}},
+            nullopt // body
     );
     if (!result) {
         return WrapError(result.error(), "MakeHTTPRequestWithRetry failed");
@@ -674,7 +697,8 @@ Result<Status> PsiCash::RefreshState(
             kMethodGET,
             "/refresh-state",
             true,
-            query_items
+            query_items,
+            nullopt // body
     );
     if (!result) {
         return WrapError(result.error(), "MakeHTTPRequestWithRetry failed");
@@ -809,7 +833,8 @@ Result<PsiCash::NewExpiringPurchaseResponse> PsiCash::NewExpiringPurchase(
                     {"distinguisher",  distinguisher},
                     // Note the conversion from positive to negative: price to amount.
                     {"expectedAmount", to_string(-expected_price)}
-            }
+            },
+            nullopt // body
     );
     if (!result) {
         return WrapError(result.error(), "MakeHTTPRequestWithRetry failed");
@@ -969,7 +994,8 @@ error::Error PsiCash::AccountLogout() {
                 kMethodPOST,
                 "/logout",
                 true,  // include auth tokens
-                {}
+                {},
+                nullopt // body
         );
         if (!result) {
             httpErr = result.error();
@@ -999,16 +1025,21 @@ error::Result<PsiCash::AccountLoginResponse> PsiCash::AccountLogin(
     MUST_BE_INITIALIZED;
 
     static const string token_types = utils::Stringer(kEarnerTokenType, ",", kSpenderTokenType, ",", kIndicatorTokenType);
+    json body =
+        {
+            {"username", utf8_username},
+            {"password", utf8_password},
+            {"instanceID", user_data_->GetInstanceID()},
+            {"tokenTypes", token_types},
+            {"oldTokens", CommaDelimitTokens()}
+        };
+
     auto result = MakeHTTPRequestWithRetry(
             kMethodPOST,
             "/login",
-            true,  // include auth tokens for tracker merge
-            {
-                {"username", utf8_username},
-                {"password", utf8_password},
-                {"instanceID", user_data_->GetInstanceID()},
-                {"tokenTypes", token_types}
-            }
+            false,  // tokens for tracker merge are provided via the request body
+            {},    // query params
+            body
     );
     if (!result) {
         return WrapError(result.error(), "MakeHTTPRequestWithRetry failed");
