@@ -63,6 +63,8 @@ struct HTTPParams {
     // name-value pairs: [ ["class", "speed-boost"], ["expectedAmount", "-10000"], ... ]
     std::vector<std::pair<std::string, std::string>> query;
 
+    // body must be omitted if empty
+    std::string body;
 };
 // The result from MakeHTTPRequestFn:
 struct HTTPResult {
@@ -246,6 +248,8 @@ public:
     /// Returns an error if modification is impossible. (In that case the error
     /// should be logged -- and added to feedback -- and home page opening should
     /// proceed with the original URL.)
+    /// Note that it does NOT return an error when there are no tokens or insufficient
+    /// tokens -- it just modifies the URL as best it can, setting `tokens` to null.
     error::Result<std::string> ModifyLandingPage(const std::string& url) const;
 
     /// Utilizes stored tokens and metadata (and a configured base URL) to craft a URL
@@ -434,19 +438,23 @@ protected:
     nlohmann::json GetRequestMetadata(int attempt) const;
     error::Result<HTTPResult> MakeHTTPRequestWithRetry(
             const std::string& method, const std::string& path, bool include_auth_tokens,
-            const std::vector<std::pair<std::string, std::string>>& query_params);
+            const std::vector<std::pair<std::string, std::string>>& query_params,
+            const nonstd::optional<nlohmann::json>& body);
 
     virtual error::Result<HTTPParams> BuildRequestParams(
             const std::string& method, const std::string& path, bool include_auth_tokens,
             const std::vector<std::pair<std::string, std::string>>& query_params, int attempt,
-            const std::map<std::string, std::string>& additional_headers) const;
+            const std::map<std::string, std::string>& additional_headers,
+            const std::string& body) const;
 
     error::Result<Status> NewTracker();
 
-    error::Result<Status>
-    RefreshState(const std::vector<std::string>& purchase_classes, bool allow_recursion);
+    error::Result<Status> RefreshState(
+      const std::vector<std::string>& purchase_classes, bool allow_recursion);
 
     error::Result<psicash::Purchase> PurchaseFromJSON(const nlohmann::json& j) const;
+
+    std::string CommaDelimitTokens() const;
 
 protected:
     bool test_;

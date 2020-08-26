@@ -30,7 +30,11 @@ class TestPsiCash : public ::testing::Test, public TempDir {
         curl << " -X " << params.method;
 
         for (auto it = params.headers.begin(); it != params.headers.end(); ++it) {
-            curl << " -H \"" << it->first << ":" << it->second << "\"";
+            curl << " -H '" << it->first << ":" << it->second << "'";
+        }
+
+        if (!params.body.empty()) {
+            curl << " --data '" << params.body << "'";
         }
 
         curl << ' ';
@@ -56,7 +60,7 @@ class TestPsiCash : public ::testing::Test, public TempDir {
         string output;
         auto code = exec(command.c_str(), output);
         if (code != 0) {
-            result.error = output;
+            result.error = output.empty() ? "curl failed with no output" : output;
             return result;
         }
 
@@ -711,12 +715,17 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     URL url_in, url_out;
 
     //
-    // No tokens (error)
+    // No tokens: no error
     //
 
     url_in = {"https://asdf.sadf.gf", "", ""};
     auto res = pc.ModifyLandingPage(url_in.ToString());
-    ASSERT_FALSE(res);
+    ASSERT_TRUE(res);
+    url_out.Parse(*res);
+    ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
+    ASSERT_EQ(url_out.query_, url_in.query_);
+    auto encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":null,"v":1})")));
+    ASSERT_EQ(url_out.fragment_, "!"s + key_part + encoded_data);
 
     //
     // Add tokens
@@ -733,7 +742,7 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
     ASSERT_EQ(url_out.query_, url_in.query_);
-    auto encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":null,"v":1})")));
+    encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":null,"v":1})")));
     ASSERT_EQ(url_out.fragment_, "!"s + key_part + encoded_data);
 
     // All tokens
@@ -1646,7 +1655,7 @@ TEST_F(TestPsiCash, LoginSimple) {
 
     // Good credentials
     res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
-    ASSERT_TRUE(res_login);
+    ASSERT_TRUE(res_login) << res_login.error();
     ASSERT_EQ(res_login->status, Status::Success);
     ASSERT_TRUE(pc.IsAccount());
     ASSERT_EQ(pc.ValidTokenTypes().size(), 3);

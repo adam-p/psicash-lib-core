@@ -76,7 +76,8 @@ error::Error PsiCashTester::MakeRewardRequests(const std::string& transaction_cl
         auto result = MakeHTTPRequestWithRetry(
                 "POST", "/transaction", true,
                 {{"class",         transaction_class},
-                 {"distinguisher", distinguisher}});
+                 {"distinguisher", distinguisher}},
+                nonstd::nullopt);
         if (!result) {
             return WrapError(result.error(), "MakeHTTPRequestWithRetry failed");
         } else if (result->code != kHTTPStatusOK) {
@@ -92,7 +93,8 @@ PsiCashTester::BuildRequestParams(const std::string& method, const std::string& 
                                   bool include_auth_tokens,
                                   const std::vector<std::pair<std::string, std::string>>& query_params,
                                   int attempt,
-                                  const std::map<std::string, std::string>& additional_headers) const {
+                                  const std::map<std::string, std::string>& additional_headers,
+                                  const std::string& body) const {
     auto bonus_headers = additional_headers;
     if (!g_request_mutators.empty()) {
         auto mutator = g_request_mutators.back();
@@ -103,7 +105,7 @@ PsiCashTester::BuildRequestParams(const std::string& method, const std::string& 
     }
 
     return PsiCash::BuildRequestParams(
-        method, path, include_auth_tokens, query_params, attempt, bonus_headers);
+        method, path, include_auth_tokens, query_params, attempt, bonus_headers, body);
 }
 
 bool PsiCashTester::MutatorsEnabled() {
@@ -115,7 +117,7 @@ bool PsiCashTester::MutatorsEnabled() {
 
     SetRequestMutators({"CheckEnabled"});
     auto result = MakeHTTPRequestWithRetry(
-            "GET", "/refresh-state", false, {});
+            "GET", "/refresh-state", false, {}, nonstd::nullopt);
     if (!result) {
         throw std::runtime_error("MUTATOR CHECK FAILED: "s + result.error().ToString());
     }

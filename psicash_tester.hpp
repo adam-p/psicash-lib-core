@@ -59,7 +59,8 @@ class PsiCashTester : public psicash::PsiCash {
     BuildRequestParams(const std::string& method, const std::string& path, bool include_auth_tokens,
                        const std::vector<std::pair<std::string, std::string>>& query_params,
                        int attempt,
-                       const std::map<std::string, std::string>& additional_headers) const;
+                       const std::map<std::string, std::string>& additional_headers,
+                       const std::string& body) const;
 
     bool MutatorsEnabled();
 
