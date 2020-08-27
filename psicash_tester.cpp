@@ -21,6 +21,7 @@
 
 #include <string>
 #include <thread>
+#include <iostream>
 #include "psicash_tester.hpp"
 #include "utils.hpp"
 #include "http_status_codes.h"
@@ -109,9 +110,9 @@ PsiCashTester::BuildRequestParams(const std::string& method, const std::string& 
 }
 
 bool PsiCashTester::MutatorsEnabled() {
-    static bool checked = false;
+    static bool checked = false, mutators_enabled = false;
     if (checked) {
-        return mutators_enabled_;
+        return mutators_enabled;
     }
     checked = true;
 
@@ -122,13 +123,13 @@ bool PsiCashTester::MutatorsEnabled() {
         throw std::runtime_error("MUTATOR CHECK FAILED: "s + result.error().ToString());
     }
 
-    mutators_enabled_ = (result->code == kHTTPStatusAccepted);
+    mutators_enabled = (result->code == kHTTPStatusAccepted);
 
-    if (!mutators_enabled_) {
-        //cout << "SKIPPING MUTATOR TESTS; code: " << result->code << endl;
+    if (!mutators_enabled) {
+        std::cout << "SKIPPING MUTATOR TESTS; code: " << result->code << std::endl;
     }
 
-    return mutators_enabled_;
+    return mutators_enabled;
 }
 
 void PsiCashTester::SetRequestMutators(const std::vector<std::string>& mutators) {

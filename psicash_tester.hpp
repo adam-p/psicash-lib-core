@@ -65,9 +65,6 @@ class PsiCashTester : public psicash::PsiCash {
     bool MutatorsEnabled();
 
     void SetRequestMutators(const std::vector<std::string>& mutators);
-
-private:
-    bool mutators_enabled_;
 };
 
 } // namespace testing
