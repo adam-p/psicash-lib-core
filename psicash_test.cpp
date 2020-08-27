@@ -843,6 +843,56 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     ASSERT_FALSE(res);
 }
 
+TEST_F(TestPsiCash, GetBuyPsiURL) {
+    // Most of the logic for GetBuyPsiURL is in ModifyLandingPage, so we don't need to
+    // repeat all of those tests.
+
+    PsiCashTester pc;
+    // Pass false for test so that we don't get "dev" and "debug" in all the params
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
+    ASSERT_FALSE(err);
+
+    const string key_part = "psicash=";
+    URL url_out;
+
+    string buy_scheme_host_path = "https://buy.psi.cash/";
+
+    //
+    // No tokens: error
+    //
+
+    auto res = pc.GetBuyPsiURL();
+    ASSERT_FALSE(res);
+
+    //
+    // No earner token: error
+    //
+
+    // Some tokens, but no earner token (different code path)
+    AuthTokens auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
+                              {kIndicatorTokenType, "kIndicatorTokenType"}};
+    err = pc.user_data().SetAuthTokens(auth_tokens, false);
+    ASSERT_FALSE(err);
+    res = pc.GetBuyPsiURL();
+    ASSERT_FALSE(res);
+
+    //
+    // With tokens
+    //
+
+    auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
+                   {kEarnerTokenType, "kEarnerTokenType"},
+                   {kIndicatorTokenType, "kIndicatorTokenType"}};
+    err = pc.user_data().SetAuthTokens(auth_tokens, false);
+    ASSERT_FALSE(err);
+    res = pc.GetBuyPsiURL();
+    ASSERT_TRUE(res);
+    url_out.Parse(*res);
+    ASSERT_EQ(url_out.scheme_host_path_, buy_scheme_host_path);
+    auto encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":"kEarnerTokenType","v":1})")));
+    ASSERT_EQ(url_out.fragment_, "!"s + key_part + encoded_data);
+}
+
 TEST_F(TestPsiCash, GetRewardedActivityData) {
     PsiCashTester pc;
     auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr);
