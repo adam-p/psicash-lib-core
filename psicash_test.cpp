@@ -68,7 +68,7 @@ class TestPsiCash : public ::testing::Test, public TempDir {
         std::string line;
 
         string body, full_output;
-        bool done_headers = false;
+        bool done_headers = false, discard_until_break = false;
         while (std::getline(ss, line, '\n')) {
             line = trim(line);
             if (line.empty()) {
@@ -76,6 +76,14 @@ class TestPsiCash : public ::testing::Test, public TempDir {
             }
 
             full_output += line + "\n";
+
+            if (discard_until_break) {
+                if (done_headers) {
+                    discard_until_break = false;
+                    done_headers = false;
+                }
+                continue;
+            }
 
             if (!done_headers) {
                 smatch match_pieces;
@@ -85,6 +93,14 @@ class TestPsiCash : public ::testing::Test, public TempDir {
                                    regex_constants::ECMAScript | regex_constants::icase);
                 if (regex_match(line, match_pieces, status_regex)) {
                     result.code = stoi(match_pieces[1].str());
+
+                    if (result.code == 100) {
+                        // When we receive "100 Continue" we need to ignore the output
+                        // and keep reading.
+                        result.code = 0;
+                        discard_until_break = true;
+                        continue;
+                    }
                 }
 
                 // Look for the Date header
@@ -1748,6 +1764,20 @@ TEST_F(TestPsiCash, LoginSimple) {
     // Different account, good credentials
     res_login = pc.AccountLogin(TEST_ACCOUNT_TWO_USERNAME, TEST_ACCOUNT_TWO_PASSWORD);
     ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::Success);
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_EQ(pc.ValidTokenTypes().size(), 3);
+    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
+    ASSERT_NE(pc.user_data().GetAuthTokens()["earner"], prev_earner_token);
+    ASSERT_EQ(pc.Balance(), 0); // we haven't yet done a RefreshState
+
+    res_refresh = pc.RefreshState({});
+    ASSERT_TRUE(res_refresh);
+    ASSERT_GT(pc.Balance(), 0); // Our test accounts don't have zero balance
+
+    // Different account, non-ASCII username and password
+    res_login = pc.AccountLogin(TEST_ACCOUNT_UNICODE_USERNAME, TEST_ACCOUNT_UNICODE_PASSWORD);
+    ASSERT_TRUE(res_login) << res_login.error();
     ASSERT_EQ(res_login->status, Status::Success);
     ASSERT_TRUE(pc.IsAccount());
     ASSERT_EQ(pc.ValidTokenTypes().size(), 3);
