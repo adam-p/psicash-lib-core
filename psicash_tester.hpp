@@ -40,14 +40,11 @@ class PsiCashTester : public psicash::PsiCash {
 
     // Most tests should use this form of Init. It will use the global flag for `init`.
     psicash::error::Error Init(const std::string& user_agent, const std::string& file_store_root,
-                      psicash::MakeHTTPRequestFn make_http_request_fn);
+                      psicash::MakeHTTPRequestFn make_http_request_fn, bool user_data_reset);
 
     // If the `test` flag really must be set explicitly, use this method.
     psicash::error::Error Init(const std::string& user_agent, const std::string& file_store_root,
-                      psicash::MakeHTTPRequestFn make_http_request_fn, bool test);
-
-    // Overridden to use the global testing flag
-    psicash::error::Error Reset(const std::string& file_store_root);
+                      psicash::MakeHTTPRequestFn make_http_request_fn, bool user_data_reset, bool test);
 
     psicash::UserData& user_data();
 

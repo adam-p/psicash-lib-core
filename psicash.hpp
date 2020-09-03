@@ -156,6 +156,7 @@ enum class Status {
     TransactionTypeNotFound,
     InvalidTokens,
     InvalidCredentials,
+    BadRequest,
     ServerError
 };
 
@@ -167,7 +168,7 @@ public:
     PsiCash(const PsiCash&) = delete;
     PsiCash& operator=(PsiCash const&) = delete;
 
-    /// Must be called once, before any other methods except Reset (or behaviour is undefined).
+    /// Must be called once, before any other methods (or behaviour is undefined).
     /// `user_agent` is required and must be non-empty.
     /// `file_store_root` is required and must be non-empty. `"."` can be used for the cwd.
     /// `make_http_request_fn` may be null and set later with SetHTTPRequestFn.
@@ -178,18 +179,14 @@ public:
     /// When uninitialized, data accessors will return zero values, and operations (e.g.,
     /// RefreshState and NewExpiringPurchase) will return errors.
     error::Error Init(const std::string& user_agent, const std::string& file_store_root,
-                      MakeHTTPRequestFn make_http_request_fn, bool test=false);
+                      MakeHTTPRequestFn make_http_request_fn, bool user_data_reset, bool test);
 
-    /// Resets the PsiCash datastore. Init() must be called after this method is used.
-    /// Returns an error if the reset failed, likely indicating a filesystem problem.
-    error::Error Reset(const std::string& file_store_root, bool test=false);
+    /// Returns true if the library has been successfully initialized (i.e., Init called).
+    bool Initialized() const;
 
     /// Resets PsiCash data for the current user (Tracker or Account). This will typically
     /// be called when wanting to revert to a Tracker from a previously logged in Account.
     error::Error ResetUser();
-
-    /// Returns true if the library has been successfully initialized (i.e., Init called).
-    bool Initialized() const;
 
     /// Can be used for updating the HTTP requester function pointer.
     void SetHTTPRequestFn(MakeHTTPRequestFn make_http_request_fn);
@@ -419,6 +416,8 @@ public:
       are tokens available for future requests.
     • InvalidCredentials: One or both of the username and password did not match a known
       Account.
+    • BadRequest: The data sent to the server was invalid in some way. This should not
+      happen in normal operation.
     • ServerError: An error occurred on the server. Probably report to the user and try
       again later. Note that the request has already been retried internally and any
       further retry should not be immediate.

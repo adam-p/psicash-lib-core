@@ -142,17 +142,66 @@ class TestPsiCash : public ::testing::Test, public TempDir {
 
 TEST_F(TestPsiCash, InitSimple) {
     {
-        // Force Init to test=false to test that path (you should typically not do this in tests)
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+        ASSERT_FALSE(pc.Initialized());
+        // Force Init to test=false to test that path (you should typically not do this in tests)
+        auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false, false);
         ASSERT_FALSE(err);
+        ASSERT_TRUE(pc.Initialized());
     }
 
     {
         PsiCashTester pc;
+        ASSERT_FALSE(pc.Initialized());
         // Force Init to test=true to test that path (you should typically not do this in tests)
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, true);
+        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false, true);
         ASSERT_FALSE(err);
+        ASSERT_TRUE(pc.Initialized());
+    }
+}
+
+TEST_F(TestPsiCash, InitReset) {
+    auto temp_dir = GetTempDir();
+    string expected_instance_id;
+    {
+        // Set up some state
+        PsiCashTester pc;
+        ASSERT_FALSE(pc.Initialized());
+        auto err = pc.Init(user_agent_, temp_dir.c_str(), HTTPRequester, false);
+        ASSERT_FALSE(err);
+        ASSERT_TRUE(pc.Initialized());
+
+        expected_instance_id = pc.user_data().GetInstanceID();
+
+        auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+        ASSERT_TRUE(res_login);
+        ASSERT_EQ(res_login->status, Status::Success);
+        ASSERT_TRUE(pc.IsAccount());
+        ASSERT_GE(pc.ValidTokenTypes().size(), 3);
+    }
+    {
+        // Check that the state persists
+        PsiCashTester pc;
+        ASSERT_FALSE(pc.Initialized());
+        auto err = pc.Init(user_agent_, temp_dir.c_str(), HTTPRequester, false);
+        ASSERT_FALSE(err);
+        ASSERT_TRUE(pc.Initialized());
+
+        ASSERT_EQ(pc.user_data().GetInstanceID(), expected_instance_id);
+        ASSERT_TRUE(pc.IsAccount());
+        ASSERT_GE(pc.ValidTokenTypes().size(), 3);
+    }
+    {
+        // Init with reset, previous state should be gone
+        PsiCashTester pc;
+        ASSERT_FALSE(pc.Initialized());
+        auto err = pc.Init(user_agent_, temp_dir.c_str(), HTTPRequester, true);
+        ASSERT_FALSE(err);
+        ASSERT_TRUE(pc.Initialized());
+
+        ASSERT_NE(pc.user_data().GetInstanceID(), expected_instance_id);
+        ASSERT_FALSE(pc.IsAccount());
+        ASSERT_EQ(pc.ValidTokenTypes().size(), 0);
     }
 }
 
@@ -161,20 +210,23 @@ TEST_F(TestPsiCash, InitFail) {
         // Datastore directory that will not work
         auto bad_dir = GetTempDir() + "/a/b/c/d/f/g";
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, bad_dir.c_str(), nullptr);
+        auto err = pc.Init(user_agent_, bad_dir.c_str(), nullptr, false);
         ASSERT_TRUE(err) << bad_dir;
+        ASSERT_FALSE(pc.Initialized());
     }
     {
         // Empty datastore directory
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, "", nullptr);
+        auto err = pc.Init(user_agent_, "", nullptr, false);
         ASSERT_TRUE(err);
+        ASSERT_FALSE(pc.Initialized());
     }
     {
         // Empty user agent
         PsiCashTester pc;
-        auto err = pc.Init("", GetTempDir().c_str(), nullptr);
+        auto err = pc.Init("", GetTempDir().c_str(), nullptr, false);
         ASSERT_TRUE(err);
+        ASSERT_FALSE(pc.Initialized());
     }
 }
 
@@ -193,7 +245,7 @@ TEST_F(TestPsiCash, UninitializedBehaviour) {
         // Failed Init
         auto bad_dir = GetTempDir() + "/a/b/c/d/f/g";
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, bad_dir.c_str(), nullptr);
+        auto err = pc.Init(user_agent_, bad_dir.c_str(), nullptr, false);
         ASSERT_TRUE(err) << bad_dir;
 
         ASSERT_FALSE(pc.Initialized());
@@ -205,56 +257,17 @@ TEST_F(TestPsiCash, UninitializedBehaviour) {
     }
 }
 
-TEST_F(TestPsiCash, Reset) {
-    int64_t want_balance = 123;
-    auto temp_dir = GetTempDir();
-
-    {
-        // Set a value
-        PsiCashTester pc;
-        auto err = pc.Init(user_agent_, temp_dir.c_str(), nullptr);
-        ASSERT_FALSE(err);
-
-        err = pc.user_data().SetBalance(want_balance);
-        ASSERT_FALSE(err);
-
-        auto got_balance = pc.Balance();
-        ASSERT_EQ(got_balance, want_balance);
-    }
-    {
-        // Check the value's persistence
-        PsiCashTester pc;
-        auto err = pc.Init(user_agent_, temp_dir.c_str(), nullptr);
-        ASSERT_FALSE(err);
-
-        auto got_balance = pc.Balance();
-        ASSERT_EQ(got_balance, want_balance);
-    }
-    {
-        // Reset
-        PsiCashTester pc;
-        auto err = pc.Reset(temp_dir.c_str());
-        ASSERT_FALSE(err);
-
-        err = pc.Init(user_agent_, temp_dir.c_str(), nullptr);
-        ASSERT_FALSE(err);
-
-        auto got_balance = pc.Balance();
-        ASSERT_EQ(got_balance, 0) << temp_dir;
-    }
-}
-
 TEST_F(TestPsiCash, SetHTTPRequestFn) {
     {
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester);
+        auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
         ASSERT_FALSE(err);
         pc.SetHTTPRequestFn(HTTPRequester);
     }
 
     {
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr);
+        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
         ASSERT_FALSE(err);
         pc.SetHTTPRequestFn(HTTPRequester);
     }
@@ -262,7 +275,7 @@ TEST_F(TestPsiCash, SetHTTPRequestFn) {
 
 TEST_F(TestPsiCash, SetRequestMetadataItem) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     auto j = pc.user_data().GetRequestMetadata();
@@ -277,7 +290,7 @@ TEST_F(TestPsiCash, SetRequestMetadataItem) {
 
 TEST_F(TestPsiCash, IsAccount) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     // Check the default
@@ -299,7 +312,7 @@ TEST_F(TestPsiCash, IsAccount) {
 
 TEST_F(TestPsiCash, ValidTokenTypes) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     auto vtt = pc.ValidTokenTypes();
@@ -323,7 +336,7 @@ TEST_F(TestPsiCash, ValidTokenTypes) {
 
 TEST_F(TestPsiCash, Balance) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     // Check the default
@@ -345,7 +358,7 @@ TEST_F(TestPsiCash, Balance) {
 
 TEST_F(TestPsiCash, GetPurchasePrices) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     auto v = pc.GetPurchasePrices();
@@ -368,7 +381,7 @@ TEST_F(TestPsiCash, GetPurchasePrices) {
 
 TEST_F(TestPsiCash, GetPurchases) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     auto v = pc.GetPurchases();
@@ -397,7 +410,7 @@ TEST_F(TestPsiCash, GetPurchases) {
 
 TEST_F(TestPsiCash, ActivePurchases) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     auto v = pc.GetPurchases();
@@ -470,7 +483,7 @@ TEST_F(TestPsiCash, DecodeAuthorization) {
 
 TEST_F(TestPsiCash, GetAuthorizations) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     auto purchases = pc.GetPurchases();
@@ -515,7 +528,7 @@ TEST_F(TestPsiCash, GetAuthorizations) {
 
 TEST_F(TestPsiCash, GetPurchasesByAuthorizationID) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     auto purchases = pc.GetPurchases();
@@ -553,7 +566,7 @@ TEST_F(TestPsiCash, GetPurchasesByAuthorizationID) {
 
 TEST_F(TestPsiCash, NextExpiringPurchase) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     auto v = pc.GetPurchases();
@@ -615,7 +628,7 @@ TEST_F(TestPsiCash, NextExpiringPurchase) {
 
 TEST_F(TestPsiCash, ExpirePurchases) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     auto v = pc.GetPurchases();
@@ -663,7 +676,7 @@ TEST_F(TestPsiCash, ExpirePurchases) {
 
 TEST_F(TestPsiCash, RemovePurchases) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     auto v = pc.GetPurchases();
@@ -724,7 +737,7 @@ TEST_F(TestPsiCash, RemovePurchases) {
 TEST_F(TestPsiCash, ModifyLandingPage) {
     PsiCashTester pc;
     // Pass false for test so that we don't get "dev" and "debug" in all the params
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false, false);
     ASSERT_FALSE(err);
 
     const string key_part = "psicash=";
@@ -865,7 +878,7 @@ TEST_F(TestPsiCash, GetBuyPsiURL) {
 
     PsiCashTester pc;
     // Pass false for test so that we don't get "dev" and "debug" in all the params
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false, false);
     ASSERT_FALSE(err);
 
     const string key_part = "psicash=";
@@ -911,7 +924,7 @@ TEST_F(TestPsiCash, GetBuyPsiURL) {
 
 TEST_F(TestPsiCash, GetRewardedActivityData) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     // Error with no tokens
@@ -939,7 +952,7 @@ TEST_F(TestPsiCash, GetDiagnosticInfo) {
     {
         // First do a simple test with test=false
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
+        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false, false);
         ASSERT_FALSE(err);
 
         auto want = R"|({
@@ -959,7 +972,7 @@ TEST_F(TestPsiCash, GetDiagnosticInfo) {
     {
         // Then do the full test with test=true
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, true);
+        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false, true);
         ASSERT_FALSE(err);
 
         auto want = R"|({
@@ -1012,7 +1025,7 @@ TEST_F(TestPsiCash, GetDiagnosticInfo) {
 
 TEST_F(TestPsiCash, RefreshState) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err);
 
     pc.user_data().Clear();
@@ -1087,7 +1100,7 @@ TEST_F(TestPsiCash, RefreshState) {
 
 TEST_F(TestPsiCash, RefreshStateAccount) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err);
 
     // Test bad is-account state. This is a local sanity check failure that will occur
@@ -1170,7 +1183,7 @@ TEST_F(TestPsiCash, RefreshStateAccount) {
 
 TEST_F(TestPsiCash, RefreshStateMutators) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err);
 
     if (!pc.MutatorsEnabled()) {
@@ -1438,7 +1451,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
 
 TEST_F(TestPsiCash, NewExpiringPurchase) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err);
 
     // Simple success
@@ -1619,7 +1632,7 @@ TEST_F(TestPsiCash, NewExpiringPurchase) {
 
 TEST_F(TestPsiCash, NewExpiringPurchaseMutators) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err);
 
     if (!pc.MutatorsEnabled()) {
@@ -1683,7 +1696,7 @@ TEST_F(TestPsiCash, NewExpiringPurchaseMutators) {
 
 TEST_F(TestPsiCash, HTTPRequestBadResult) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     // This isn't a "bad" result, exactly, but we'll force an error code and message.
@@ -1697,16 +1710,23 @@ TEST_F(TestPsiCash, HTTPRequestBadResult) {
     ASSERT_NE(refresh_result.error().ToString().find(want_error_message), string::npos);
 }
 
-TEST_F(TestPsiCash, LoginSimple) {
+TEST_F(TestPsiCash, AccountLoginSimple) {
     // The initial internal release doesn't have Logout, so the tests need to be constrained.
 
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err);
+
+    // Empty username and password
+    auto res_login = pc.AccountLogin("", "");
+    ASSERT_TRUE(res_login) << res_login.error();
+    ASSERT_EQ(res_login->status, Status::BadRequest);
+    ASSERT_FALSE(pc.IsAccount());
+    ASSERT_TRUE(pc.ValidTokenTypes().empty());
 
     // Bad username
     auto rand = utils::RandomID(); // ensure we don't match a real user
-    auto res_login = pc.AccountLogin(rand, "this is a bad password");
+    res_login = pc.AccountLogin(rand, "this is a bad password");
     ASSERT_TRUE(res_login) << res_login.error();
     ASSERT_EQ(res_login->status, Status::InvalidCredentials);
     ASSERT_FALSE(pc.IsAccount());
@@ -1790,9 +1810,9 @@ TEST_F(TestPsiCash, LoginSimple) {
     ASSERT_GT(pc.Balance(), 0); // Our test accounts don't have zero balance
 }
 
-TEST_F(TestPsiCash, LoginMerge) {
+TEST_F(TestPsiCash, AccountLoginMerge) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err);
 
     auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
@@ -1887,11 +1907,11 @@ TEST_F(TestPsiCash, LoginMerge) {
     }
 }
 
-TEST_F(TestPsiCash, Logout) {
+TEST_F(TestPsiCash, AccountLogout) {
     // This also tests the combination of logging in and out
 
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester);
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err);
 
     // The instance ID should not change throughout this
@@ -1936,7 +1956,7 @@ TEST_F(TestPsiCash, Logout) {
     ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
 
     err = pc.AccountLogout();
-    ASSERT_FALSE(err);
+    ASSERT_FALSE(err) << err;
     // This is the state we should be in after a logout
     ASSERT_TRUE(pc.IsAccount());
     ASSERT_TRUE(pc.ValidTokenTypes().empty());
@@ -1954,7 +1974,7 @@ TEST_F(TestPsiCash, Logout) {
 
     // Log in again with the same user
     res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
-    ASSERT_TRUE(res_login);
+    ASSERT_TRUE(res_login) << res_login.error();
     ASSERT_EQ(res_login->status, Status::Success);
     ASSERT_TRUE(pc.IsAccount());
     ASSERT_GE(pc.ValidTokenTypes().size(), 3);

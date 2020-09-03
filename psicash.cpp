@@ -43,12 +43,12 @@ using namespace error;
 
 namespace psicash {
 
-constexpr const char* kEarnerTokenType = "earner";
-constexpr const char* kSpenderTokenType = "spender";
-constexpr const char* kIndicatorTokenType = "indicator";
-constexpr const char* kAccountTokenType = "account";
+const char* const kEarnerTokenType = "earner";
+const char* const kSpenderTokenType = "spender";
+const char* const kIndicatorTokenType = "indicator";
+const char* const kAccountTokenType = "account";
 
-constexpr const char* kTransactionIDZero = "";
+const char* const kTransactionIDZero = "";
 
 namespace prod {
 static constexpr const char* kAPIServerScheme = "https";
@@ -93,7 +93,8 @@ PsiCash::~PsiCash() {
 }
 
 Error PsiCash::Init(const string& user_agent, const string& file_store_root,
-                    MakeHTTPRequestFn make_http_request_fn, bool test) {
+                    MakeHTTPRequestFn make_http_request_fn, bool user_data_reset,
+                    bool test) {
     test_ = test;
     if (test) {
         server_scheme_ = dev::kAPIServerScheme;
@@ -114,6 +115,10 @@ Error PsiCash::Init(const string& user_agent, const string& file_store_root,
         return MakeCriticalError("file_store_root is required");
     }
 
+    if (user_data_reset) {
+        user_data_->Clear(file_store_root, test);
+    }
+
     // May still be null.
     make_http_request_fn_ = std::move(make_http_request_fn);
 
@@ -129,11 +134,6 @@ Error PsiCash::Init(const string& user_agent, const string& file_store_root,
 
 bool PsiCash::Initialized() const {
     return initialized_;
-}
-
-Error PsiCash::Reset(const string& file_store_root, bool test) {
-    auto temp_user_data = std::make_unique<UserData>();
-    return PassError(temp_user_data->Clear(file_store_root, test));
 }
 
 Error PsiCash::ResetUser() {
@@ -540,6 +540,7 @@ Result<HTTPParams> PsiCash::BuildRequestParams(
     params.query = query_params;
 
     params.headers = additional_headers;
+    params.headers["Accept"] = "application/json";
     params.headers["User-Agent"] = user_agent_;
 
     if (include_auth_tokens) {
@@ -558,7 +559,7 @@ Result<HTTPParams> PsiCash::BuildRequestParams(
 
     params.body = body;
     if (!body.empty()) {
-        params.headers["Content-Type"] = "application/json";
+        params.headers["Content-Type"] = "application/json; charset=utf-8";
     }
 
     return params;
@@ -986,25 +987,21 @@ error::Error PsiCash::AccountLogout() {
         return MakeNoncriticalError("user is not account");
     }
 
-    // If there are no valid tokens, there's no point in making the /logout request to the
-    // server. So we'll skip it.
     Error httpErr;
-    if (ValidTokenTypes().empty()) {
-        auto result = MakeHTTPRequestWithRetry(
-                kMethodPOST,
-                "/logout",
-                true,  // include auth tokens
-                {},
-                nullopt // body
-        );
-        if (!result) {
-            httpErr = result.error();
-        }
-        else if (result->code != kHTTPStatusOK) {
-            httpErr = MakeNoncriticalError(utils::Stringer("logout request failed; code:", result->code, "; body:", result->body));
-        }
-        // Even if an error occurred, we still want to do the local logout, so carry on.
+    auto result = MakeHTTPRequestWithRetry(
+            kMethodPOST,
+            "/logout",
+            true,  // include auth tokens
+            {},
+            nullopt // body
+    );
+    if (!result) {
+        httpErr = result.error();
     }
+    else if (result->code != kHTTPStatusOK) {
+        httpErr = MakeNoncriticalError(utils::Stringer("logout request failed; code:", result->code, "; body:", result->body));
+    }
+    // Even if an error occurred, we still want to do the local logout, so carry on.
 
     auto localErr = user_data_->DeleteUserData(true);
 
@@ -1012,9 +1009,14 @@ error::Error PsiCash::AccountLogout() {
     if (localErr) {
         return WrapError(localErr, "LocalLogout failed");
     }
+    /*
+    // We are not returning an error if the remote request failed. We have already
+    // affected the local logout, and we'll have to rely on the next login from this
+    // device to invalidate the tokens on the server.
     else if (httpErr) {
         return WrapError(httpErr, "MakeHTTPRequestWithRetry failed");
     }
+    */
 
     return nullerr;
 }
@@ -1097,6 +1099,11 @@ error::Result<PsiCash::AccountLoginResponse> PsiCash::AccountLogin(
     else if (result->code == kHTTPStatusUnauthorized) {
         return PsiCash::AccountLoginResponse{
                 Status::InvalidCredentials
+        };
+    }
+    else if (result->code == kHTTPStatusBadRequest) {
+        return PsiCash::AccountLoginResponse{
+                Status::BadRequest
         };
     }
     else if (IsServerError(result->code)) {
