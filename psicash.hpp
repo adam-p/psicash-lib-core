@@ -174,12 +174,13 @@ public:
     /// `make_http_request_fn` may be null and set later with SetHTTPRequestFn.
     /// Returns false if there's an unrecoverable error (such as an inability to use the
     /// filesystem).
+    /// If `force_reset` is true, the datastore will be completely wiped out and reset.
     /// If `test` is true, then the test server will be used, and other testing interfaces
     /// will be available. Should only be used for testing.
     /// When uninitialized, data accessors will return zero values, and operations (e.g.,
     /// RefreshState and NewExpiringPurchase) will return errors.
     error::Error Init(const std::string& user_agent, const std::string& file_store_root,
-                      MakeHTTPRequestFn make_http_request_fn, bool user_data_reset, bool test);
+                      MakeHTTPRequestFn make_http_request_fn, bool force_reset, bool test);
 
     /// Returns true if the library has been successfully initialized (i.e., Init called).
     bool Initialized() const;

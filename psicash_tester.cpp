@@ -48,13 +48,13 @@ PsiCashTester::~PsiCashTester() {
 }
 
 error::Error PsiCashTester::Init(const string& user_agent, const string& file_store_root,
-                                 MakeHTTPRequestFn make_http_request_fn, bool user_data_reset) {
-    return Init(user_agent, file_store_root, make_http_request_fn, user_data_reset, DEV_ENV);
+                                 MakeHTTPRequestFn make_http_request_fn, bool force_reset) {
+    return Init(user_agent, file_store_root, make_http_request_fn, force_reset, DEV_ENV);
 }
 
 error::Error PsiCashTester::Init(const string& user_agent, const string& file_store_root,
-                                 MakeHTTPRequestFn make_http_request_fn, bool user_data_reset, bool test) {
-    return PsiCash::Init(user_agent, file_store_root, make_http_request_fn, user_data_reset, test);
+                                 MakeHTTPRequestFn make_http_request_fn, bool force_reset, bool test) {
+    return PsiCash::Init(user_agent, file_store_root, make_http_request_fn, force_reset, test);
 }
 
 UserData& PsiCashTester::user_data() {

@@ -93,7 +93,7 @@ PsiCash::~PsiCash() {
 }
 
 Error PsiCash::Init(const string& user_agent, const string& file_store_root,
-                    MakeHTTPRequestFn make_http_request_fn, bool user_data_reset,
+                    MakeHTTPRequestFn make_http_request_fn, bool force_reset,
                     bool test) {
     test_ = test;
     if (test) {
@@ -115,7 +115,7 @@ Error PsiCash::Init(const string& user_agent, const string& file_store_root,
         return MakeCriticalError("file_store_root is required");
     }
 
-    if (user_data_reset) {
+    if (force_reset) {
         user_data_->Clear(file_store_root, test);
     }
 
