@@ -189,6 +189,11 @@ public:
     /// be called when wanting to revert to a Tracker from a previously logged in Account.
     error::Error ResetUser();
 
+    /// Forces the given tokens and account status to be set in the datastore. Must be
+    /// called after Init(). RefreshState() must be called after method (and shouldn't be
+    /// be called before this method, although behaviour will be okay).
+    error::Error MigrateTokens(const std::map<std::string, std::string>& tokens, bool is_account);
+
     /// Can be used for updating the HTTP requester function pointer.
     void SetHTTPRequestFn(MakeHTTPRequestFn make_http_request_fn);
 

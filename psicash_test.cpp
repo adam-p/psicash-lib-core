@@ -257,6 +257,67 @@ TEST_F(TestPsiCash, UninitializedBehaviour) {
     }
 }
 
+TEST_F(TestPsiCash, MigrateTokens) {
+    {
+        // Without calling RefreshState first (so no preexisting tokens); tracker.
+        PsiCashTester pc;
+        auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+        ASSERT_FALSE(err);
+
+        auto vtt = pc.ValidTokenTypes();
+        ASSERT_EQ(vtt.size(), 0);
+
+        map<string, string> tokens = {{"a", "a"}, {"b", "b"}, {"c", "c"}};
+        err = pc.MigrateTokens(tokens, false);
+        ASSERT_FALSE(err);
+        vtt = pc.ValidTokenTypes();
+        ASSERT_EQ(vtt.size(), 3);
+        ASSERT_FALSE(pc.IsAccount());
+    }
+    {
+        // Without calling RefreshState first (so no preexisting tokens); account.
+        PsiCashTester pc;
+        auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+        ASSERT_FALSE(err);
+
+        auto vtt = pc.ValidTokenTypes();
+        ASSERT_EQ(vtt.size(), 0);
+
+        map<string, string> tokens = {{"a", "a"}, {"b", "b"}, {"c", "c"}};
+        err = pc.MigrateTokens(tokens, true);
+        ASSERT_FALSE(err);
+        vtt = pc.ValidTokenTypes();
+        ASSERT_EQ(vtt.size(), 3);
+        ASSERT_TRUE(pc.IsAccount());
+    }
+    {
+        // Call RefreshState first (so preexisting tokens and user data).
+        PsiCashTester pc;
+        auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+        ASSERT_FALSE(err);
+
+        auto vtt = pc.ValidTokenTypes();
+        ASSERT_EQ(vtt.size(), 0);
+
+        auto res = pc.RefreshState({"speed-boost"});
+        ASSERT_TRUE(res) << res.error();
+        ASSERT_EQ(*res, Status::Success) << (int)*res;
+        ASSERT_FALSE(pc.IsAccount());
+        ASSERT_GE(pc.ValidTokenTypes().size(), 3);
+        ASSERT_THAT(pc.Balance(), AllOf(Ge(0), Le(MAX_STARTING_BALANCE)));
+        ASSERT_GE(pc.GetPurchasePrices().size(), 2);
+
+        map<string, string> tokens = {{"a", "a"}, {"b", "b"}, {"c", "c"}};
+        err = pc.MigrateTokens(tokens, true);
+        ASSERT_FALSE(err);
+        vtt = pc.ValidTokenTypes();
+        ASSERT_EQ(vtt.size(), 3);
+        ASSERT_TRUE(pc.IsAccount());
+        ASSERT_EQ(pc.Balance(), 0);
+        ASSERT_GE(pc.GetPurchasePrices().size(), 0);
+    }
+}
+
 TEST_F(TestPsiCash, SetHTTPRequestFn) {
     {
         PsiCashTester pc;

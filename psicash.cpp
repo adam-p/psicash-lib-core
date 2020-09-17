@@ -140,6 +140,18 @@ Error PsiCash::ResetUser() {
     return PassError(user_data_->DeleteUserData(/*is_logged_out_account=*/false));
 }
 
+Error PsiCash::MigrateTokens(const map<string, string>& tokens, bool is_account) {
+    UserData::WritePauser pauser(*user_data_);
+    // Ignoring return values while writing is paused.
+    // Blow away any user state, as the newly migrated tokens are overwriting it.
+    (void)ResetUser();
+    (void)user_data_->SetAuthTokens(tokens, is_account);
+    if (auto err = pauser.Commit()) {
+        return WrapError(err, "user data write failed");
+    }
+    return nullerr;
+}
+
 void PsiCash::SetHTTPRequestFn(MakeHTTPRequestFn make_http_request_fn) {
     make_http_request_fn_ = std::move(make_http_request_fn);
 }
