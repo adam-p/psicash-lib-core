@@ -58,6 +58,10 @@ TEST_F(TestUserData, InitUpgrade)
     ASSERT_EQ(ud.GetPurchases().size(), 1);
     ASSERT_EQ(ud.GetLastTransactionID(), "boosttransid");
     ASSERT_EQ(ud.GetRequestMetadata().size(), 4);
+
+    datetime::DateTime tokens_timestamp_dt;
+    ASSERT_TRUE(tokens_timestamp_dt.FromISO8601(ud.GetAuthTokensTimestamp()));
+    ASSERT_NEAR(tokens_timestamp_dt.MillisSinceEpoch(), datetime::DateTime::Now().MillisSinceEpoch(), 5000) << "Try resyncing your local clock";
 }
 
 TEST_F(TestUserData, InitBadVersion)
@@ -79,6 +83,7 @@ TEST_F(TestUserData, Persistence)
     auto want_server_time_diff_ms = 54321;
     auto want_server_time_diff = datetime::Duration(want_server_time_diff_ms);
     AuthTokens want_auth_tokens = {{"k1", "v1"}, {"k2", "v2"}};
+    auto want_auth_tokens_timestamp = "tokens-timestamp"s;
     bool want_is_account = true;
     int64_t want_balance = 12345;
     PurchasePrices want_purchase_prices = {{"tc1", "d1", 123}, {"tc2", "d2", 321}};
@@ -100,7 +105,7 @@ TEST_F(TestUserData, Persistence)
         err = ud.SetServerTimeDiff(shifted_now);
         ASSERT_FALSE(err);
 
-        err = ud.SetAuthTokens(want_auth_tokens, want_is_account);
+        err = ud.SetAuthTokens(want_auth_tokens, want_auth_tokens_timestamp, want_is_account);
         ASSERT_FALSE(err);
 
         err = ud.SetBalance(want_balance);
@@ -127,6 +132,9 @@ TEST_F(TestUserData, Persistence)
 
         auto got_auth_tokens = ud.GetAuthTokens();
         ASSERT_EQ(got_auth_tokens, want_auth_tokens);
+
+        auto got_auth_tokens_timestamp = ud.GetAuthTokensTimestamp();
+        ASSERT_EQ(got_auth_tokens_timestamp, want_auth_tokens_timestamp);
 
         auto got_is_account = ud.GetIsAccount();
         ASSERT_EQ(got_is_account, want_is_account);
@@ -261,27 +269,36 @@ TEST_F(TestUserData, AuthTokens)
     auto tokens = ud.GetAuthTokens();
     ASSERT_EQ(tokens.size(), 0);
 
+    auto tokens_timestamp = ud.GetAuthTokensTimestamp();
+    ASSERT_FALSE(tokens_timestamp.empty());
+
     auto is_account = ud.GetIsAccount();
     ASSERT_EQ(is_account, false);
 
     // Set then get
     AuthTokens want = {{"k1", "v1"}, {"k2", "v2"}};
-    err = ud.SetAuthTokens(want, false);
+    err = ud.SetAuthTokens(want, "tokens-timestamp", false);
     ASSERT_FALSE(err);
     auto got_tokens = ud.GetAuthTokens();
     ASSERT_EQ(want, got_tokens);
+
+    tokens_timestamp = ud.GetAuthTokensTimestamp();
+    ASSERT_EQ(tokens_timestamp, "tokens-timestamp");
+
     is_account = ud.GetIsAccount();
     ASSERT_EQ(is_account, false);
 
-    err = ud.SetAuthTokens(want, true);
+    err = ud.SetAuthTokens(want, "tokens-timestamp-new", true);
     ASSERT_FALSE(err);
     got_tokens = ud.GetAuthTokens();
     ASSERT_EQ(want, got_tokens);
+    tokens_timestamp = ud.GetAuthTokensTimestamp();
+    ASSERT_EQ(tokens_timestamp, "tokens-timestamp-new");
     is_account = ud.GetIsAccount();
     ASSERT_EQ(is_account, true);
 
     // CullAuthTokens
-    err = ud.SetAuthTokens({{"k1","v1"},{"k2","v2"},{"k3","v3"},{"k4","v4"},}, false);
+    err = ud.SetAuthTokens({{"k1","v1"},{"k2","v2"},{"k3","v3"},{"k4","v4"},}, "tokens-timestamp", false);
     ASSERT_FALSE(err);
     std::map<std::string, bool> valid_tokens = {{"v1",true},{"v2",false},{"v3",true}};
     want = {{"k1","v1"},{"k3","v3"}};

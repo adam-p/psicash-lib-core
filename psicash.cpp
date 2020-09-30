@@ -145,7 +145,7 @@ Error PsiCash::MigrateTokens(const map<string, string>& tokens, bool is_account)
     // Ignoring return values while writing is paused.
     // Blow away any user state, as the newly migrated tokens are overwriting it.
     (void)ResetUser();
-    (void)user_data_->SetAuthTokens(tokens, is_account);
+    (void)user_data_->SetAuthTokens(tokens, datetime::DateTime::Now().ToISO8601(), is_account);
     if (auto err = pauser.Commit()) {
         return WrapError(err, "user data write failed");
     }
@@ -320,8 +320,10 @@ Result<string> PsiCash::ModifyLandingPage(const string& url_string) const {
     auto auth_tokens = user_data_->GetAuthTokens();
     if (auth_tokens.count(kEarnerTokenType) == 0) {
         psicash_data["tokens"] = nullptr;
+        psicash_data["tokens_timestamp"] = nullptr;
     } else {
-        psicash_data["tokens"] = auth_tokens[kEarnerTokenType];
+        psicash_data["tokens"] = CommaDelimitTokens({kEarnerTokenType});
+        psicash_data["tokens_timestamp"] = user_data_->GetAuthTokensTimestamp();
     }
 
     if (test_) {
@@ -556,7 +558,7 @@ Result<HTTPParams> PsiCash::BuildRequestParams(
     params.headers["User-Agent"] = user_agent_;
 
     if (include_auth_tokens) {
-        params.headers["X-PsiCash-Auth"] = CommaDelimitTokens();
+        params.headers["X-PsiCash-Auth"] = CommaDelimitTokens({});
     }
 
     auto metadata = GetRequestMetadata(attempt);
@@ -577,13 +579,17 @@ Result<HTTPParams> PsiCash::BuildRequestParams(
     return params;
 }
 
-std::string PsiCash::CommaDelimitTokens() const {
+/// Returns our auth tokens in comma-delimited format. If types is `{}`, all tokens will
+/// be included; otherwise only tokens of the types specified will be included.
+std::string PsiCash::CommaDelimitTokens(const std::vector<std::string>& types) const {
     string s;
     for (const auto& at : user_data_->GetAuthTokens()) {
-        if (!s.empty()) {
-            s += ",";
+        if (types.empty() || std::find(types.begin(), types.end(), at.first) != types.end()) {
+            if (!s.empty()) {
+                s += ",";
+            }
+            s += at.second;
         }
-        s += at.second;
     }
     return s;
 }
@@ -626,10 +632,19 @@ Result<Status> PsiCash::NewTracker() {
                     utils::Stringer("bad number of tokens received: ", auth_tokens.size()));
         }
 
+        datetime::DateTime server_timestamp;
+        if (!server_timestamp.FromRFC7231(result->date)) {
+            // The Date header should always be present and should always be the expected format
+            assert(false);
+            // This is bad and unexpected, but we can fall back to using a local timestamp
+            server_timestamp = datetime::DateTime::Now();
+        }
+
         // Set our new data in a single write.
         UserData::WritePauser pauser(*user_data_);
         (void)user_data_->SetIsLoggedOutAccount(false);
-        (void)user_data_->SetAuthTokens(auth_tokens, /*is_account=*/false);
+        (void)user_data_->SetAuthTokens(auth_tokens, server_timestamp.ToISO8601(),
+                                        /*is_account=*/false);
         (void)user_data_->SetBalance(0);
         if (auto err = pauser.Commit()) {
             return WrapError(err, "user data write failed");
@@ -1045,7 +1060,7 @@ error::Result<PsiCash::AccountLoginResponse> PsiCash::AccountLogin(
             {"password", utf8_password},
             {"instanceID", user_data_->GetInstanceID()},
             {"tokenTypes", token_types},
-            {"oldTokens", CommaDelimitTokens()}
+            {"oldTokens", CommaDelimitTokens({})}
         };
 
     auto result = MakeHTTPRequestWithRetry(
@@ -1095,10 +1110,19 @@ error::Result<PsiCash::AccountLoginResponse> PsiCash::AccountLogin(
                     utils::Stringer("bad number of tokens received: ", auth_tokens.size()));
         }
 
+        datetime::DateTime server_timestamp;
+        if (!server_timestamp.FromRFC7231(result->date)) {
+            // The Date header should always be present and should always be the expected format
+            assert(false);
+            // This is bad and unexpected, but we can fall back to using a local timestamp
+            server_timestamp = datetime::DateTime::Now();
+        }
+
         // Set our new data in a single write.
         UserData::WritePauser pauser(*user_data_);
         (void)user_data_->SetIsLoggedOutAccount(false);
-        (void)user_data_->SetAuthTokens(auth_tokens, /*is_account=*/true);
+        (void)user_data_->SetAuthTokens(auth_tokens, server_timestamp.ToISO8601(),
+                                        /*is_account=*/true);
         if (auto err = pauser.Commit()) {
             return WrapError(err, "user data write failed");
         }

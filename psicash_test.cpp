@@ -380,7 +380,7 @@ TEST_F(TestPsiCash, ValidTokenTypes) {
     ASSERT_EQ(vtt.size(), 0);
 
     AuthTokens at = {{"a", "a"}, {"b", "b"}, {"c", "c"}};
-    err = pc.user_data().SetAuthTokens(at, false);
+    err = pc.user_data().SetAuthTokens(at, "value irrelevant", false);
     vtt = pc.ValidTokenTypes();
     ASSERT_EQ(vtt.size(), 3);
     for (const auto& k : vtt) {
@@ -390,7 +390,7 @@ TEST_F(TestPsiCash, ValidTokenTypes) {
     ASSERT_EQ(at.size(), 0); // we should have erase all items
 
     AuthTokens empty;
-    err = pc.user_data().SetAuthTokens(empty, false);
+    err = pc.user_data().SetAuthTokens(empty, "value irrelevant", false);
     vtt = pc.ValidTokenTypes();
     ASSERT_EQ(vtt.size(), 0);
 }
@@ -814,7 +814,7 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
     ASSERT_EQ(url_out.query_, url_in.query_);
-    auto encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":null,"v":1})")));
+    auto encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":null,"tokens_timestamp":null,"v":1})")));
     ASSERT_EQ(url_out.fragment_, "!"s + key_part + encoded_data);
 
     //
@@ -824,7 +824,7 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     // Some tokens, but no earner token (different code path)
     AuthTokens auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
                               {kIndicatorTokenType, "kIndicatorTokenType"}};
-    err = pc.user_data().SetAuthTokens(auth_tokens, false);
+    err = pc.user_data().SetAuthTokens(auth_tokens, "tokens-timestamp", false);
     ASSERT_FALSE(err);
     url_in = {"https://asdf.sadf.gf", "", ""};
     res = pc.ModifyLandingPage(url_in.ToString());
@@ -832,14 +832,14 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
     ASSERT_EQ(url_out.query_, url_in.query_);
-    encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":null,"v":1})")));
+    encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":null,"tokens_timestamp":null,"v":1})")));
     ASSERT_EQ(url_out.fragment_, "!"s + key_part + encoded_data);
 
     // All tokens
     auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
                    {kEarnerTokenType, "kEarnerTokenType"},
                    {kIndicatorTokenType, "kIndicatorTokenType"}};
-    err = pc.user_data().SetAuthTokens(auth_tokens, false);
+    err = pc.user_data().SetAuthTokens(auth_tokens, "tokens-timestamp", false);
     ASSERT_FALSE(err);
     url_in = {"https://asdf.sadf.gf", "", ""};
     res = pc.ModifyLandingPage(url_in.ToString());
@@ -847,14 +847,14 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
     ASSERT_EQ(url_out.query_, url_in.query_);
-    encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":"kEarnerTokenType","v":1})")));
+    encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":"kEarnerTokenType","tokens_timestamp":"tokens-timestamp","v":1})")));
     ASSERT_EQ(url_out.fragment_, "!"s + key_part + encoded_data);
 
     //
     // No metadata set
     //
 
-    encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":"kEarnerTokenType","v":1})")));
+    encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":"kEarnerTokenType","tokens_timestamp":"tokens-timestamp","v":1})")));
 
     url_in = {"https://asdf.sadf.gf", "", ""};
     res = pc.ModifyLandingPage(url_in.ToString());
@@ -922,7 +922,7 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
     ASSERT_EQ(url_out.query_, url_in.query_);
-    encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"k":"v","user_agent":")", user_agent_, R"(","v":1},"tokens":"kEarnerTokenType","v":1})")));
+    encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"k":"v","user_agent":")", user_agent_, R"(","v":1},"tokens":"kEarnerTokenType","tokens_timestamp":"tokens-timestamp","v":1})")));
     ASSERT_EQ(url_out.fragment_, "!"s + key_part + encoded_data);
 
     //
@@ -961,7 +961,7 @@ TEST_F(TestPsiCash, GetBuyPsiURL) {
     // Some tokens, but no earner token (different code path)
     AuthTokens auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
                               {kIndicatorTokenType, "kIndicatorTokenType"}};
-    err = pc.user_data().SetAuthTokens(auth_tokens, false);
+    err = pc.user_data().SetAuthTokens(auth_tokens, "tokens-timestamp", false);
     ASSERT_FALSE(err);
     res = pc.GetBuyPsiURL();
     ASSERT_FALSE(res);
@@ -973,13 +973,13 @@ TEST_F(TestPsiCash, GetBuyPsiURL) {
     auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
                    {kEarnerTokenType, "kEarnerTokenType"},
                    {kIndicatorTokenType, "kIndicatorTokenType"}};
-    err = pc.user_data().SetAuthTokens(auth_tokens, false);
+    err = pc.user_data().SetAuthTokens(auth_tokens, "tokens-timestamp", false);
     ASSERT_FALSE(err);
     res = pc.GetBuyPsiURL();
     ASSERT_TRUE(res);
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, buy_scheme_host_path);
-    auto encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":"kEarnerTokenType","v":1})")));
+    auto encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":"kEarnerTokenType","tokens_timestamp":"tokens-timestamp","v":1})")));
     ASSERT_EQ(url_out.fragment_, "!"s + key_part + encoded_data);
 }
 
@@ -995,7 +995,7 @@ TEST_F(TestPsiCash, GetRewardedActivityData) {
     AuthTokens auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
                               {kEarnerTokenType, "kEarnerTokenType"},
                               {kIndicatorTokenType, "kIndicatorTokenType"}};
-    err = pc.user_data().SetAuthTokens(auth_tokens, false);
+    err = pc.user_data().SetAuthTokens(auth_tokens, "tokens-timestamp", false);
     ASSERT_FALSE(err);
 
     res = pc.GetRewardedActivityData();
@@ -1053,7 +1053,7 @@ TEST_F(TestPsiCash, GetDiagnosticInfo) {
         pc.user_data().SetPurchasePrices({{"tc1", "d1", 123}, {"tc2", "d2", 321}});
         pc.user_data().SetPurchases(
                 {{"id2", "tc2", "d2", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt}});
-        pc.user_data().SetAuthTokens({{"a", "a"}, {"b", "b"}, {"c", "c"}}, true);
+        pc.user_data().SetAuthTokens({{"a", "a"}, {"b", "b"}, {"c", "c"}}, "tokens-timestamp", true);
         // pc.user_data().SetServerTimeDiff() // too hard to do reliably
         want = R"|({
         "balance":12345,
@@ -1091,6 +1091,9 @@ TEST_F(TestPsiCash, RefreshState) {
 
     pc.user_data().Clear();
     ASSERT_TRUE(pc.ValidTokenTypes().empty());
+    auto pre_tokens_timestamp = pc.user_data().GetAuthTokensTimestamp();
+    // Not checking the value, since it's not valid yet.
+    ASSERT_FALSE(pre_tokens_timestamp.empty());
 
     // Basic NewTracker success
     auto res = pc.RefreshState({"speed-boost"});
@@ -1101,8 +1104,14 @@ TEST_F(TestPsiCash, RefreshState) {
     ASSERT_THAT(pc.Balance(), AllOf(Ge(0), Le(MAX_STARTING_BALANCE)));
     ASSERT_GE(pc.GetPurchasePrices().size(), 2);
 
+    ASSERT_NE(pc.user_data().GetAuthTokensTimestamp(), pre_tokens_timestamp);
+    datetime::DateTime tokens_timestamp_dt;
+    ASSERT_TRUE(tokens_timestamp_dt.FromISO8601(pc.user_data().GetAuthTokensTimestamp()));
+    ASSERT_NEAR(tokens_timestamp_dt.MillisSinceEpoch(), datetime::DateTime::Now().MillisSinceEpoch(), 5000) << "Try resyncing your local clock";
+
     // Test with existing tracker
     auto want_tokens = pc.user_data().GetAuthTokens();
+    auto want_tokens_timestamp = pc.user_data().GetAuthTokensTimestamp();
     res = pc.RefreshState({"speed-boost"});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(*res, Status::Success);
@@ -1112,6 +1121,7 @@ TEST_F(TestPsiCash, RefreshState) {
     auto speed_boost_purchase_prices = pc.GetPurchasePrices();
     ASSERT_GE(pc.GetPurchasePrices().size(), 2);
     ASSERT_EQ(want_tokens, pc.user_data().GetAuthTokens());
+    ASSERT_EQ(want_tokens_timestamp, pc.user_data().GetAuthTokensTimestamp());
 
     // Multiple purchase classes
     pc.user_data().Clear();
@@ -1784,6 +1794,8 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_EQ(res_login->status, Status::BadRequest);
     ASSERT_FALSE(pc.IsAccount());
     ASSERT_TRUE(pc.ValidTokenTypes().empty());
+    // Not checking the value, since it's not valid yet.
+    ASSERT_FALSE(pc.user_data().GetAuthTokensTimestamp().empty());
 
     // Bad username
     auto rand = utils::RandomID(); // ensure we don't match a real user
@@ -1792,6 +1804,7 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_EQ(res_login->status, Status::InvalidCredentials);
     ASSERT_FALSE(pc.IsAccount());
     ASSERT_TRUE(pc.ValidTokenTypes().empty());
+    ASSERT_FALSE(pc.user_data().GetAuthTokensTimestamp().empty());
 
     // Good username, bad password
     res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, "this is a bad password");
@@ -1799,8 +1812,13 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_EQ(res_login->status, Status::InvalidCredentials);
     ASSERT_FALSE(pc.IsAccount());
     ASSERT_TRUE(pc.ValidTokenTypes().empty());
+    ASSERT_FALSE(pc.user_data().GetAuthTokensTimestamp().empty());
 
     // Good credentials
+    auto pre_tokens_timestamp = pc.user_data().GetAuthTokensTimestamp();
+    // Sleep long enough to be sure we'll get a different tokens timestamp (with second resolution)
+    this_thread::sleep_for(chrono::milliseconds(2000));
+    ASSERT_FALSE(pre_tokens_timestamp.empty());
     res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
     ASSERT_TRUE(res_login) << res_login.error();
     ASSERT_EQ(res_login->status, Status::Success);
@@ -1810,9 +1828,16 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_EQ(pc.Balance(), 0); // we haven't called RefreshState yet
     auto prev_earner_token = pc.user_data().GetAuthTokens()["earner"];
 
+    auto post_tokens_timestamp = pc.user_data().GetAuthTokensTimestamp();
+    ASSERT_NE(post_tokens_timestamp, pre_tokens_timestamp);
+    datetime::DateTime tokens_timestamp_dt;
+    ASSERT_TRUE(tokens_timestamp_dt.FromISO8601(post_tokens_timestamp));
+    ASSERT_NEAR(tokens_timestamp_dt.MillisSinceEpoch(), datetime::DateTime::Now().MillisSinceEpoch(), 5000) << "Try resyncing your local clock";
+
     auto res_refresh = pc.RefreshState({});
     ASSERT_TRUE(res_refresh);
     ASSERT_GT(pc.Balance(), 0); // Our test accounts don't have zero balance
+    ASSERT_EQ(pc.user_data().GetAuthTokensTimestamp(), post_tokens_timestamp); // Shouldn't have changed
 
     // Try to log in again with bad creds
     res_login = pc.AccountLogin(rand, "this is a bad password");
@@ -1833,6 +1858,9 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
 
     // Log in again with the same account
+    pre_tokens_timestamp = pc.user_data().GetAuthTokensTimestamp();
+    // Sleep long enough to be sure we'll get a different tokens timestamp (with second resolution)
+    this_thread::sleep_for(chrono::milliseconds(2000));
     res_login = pc.AccountLogin(TEST_ACCOUNT_TWO_USERNAME, TEST_ACCOUNT_TWO_PASSWORD);
     ASSERT_TRUE(res_login);
     ASSERT_EQ(res_login->status, Status::Success);
@@ -1841,8 +1869,15 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
     ASSERT_NE(pc.user_data().GetAuthTokens()["earner"], prev_earner_token); // should get a different token
     ASSERT_EQ(pc.Balance(), 0); // we haven't yet done a RefreshState
+    post_tokens_timestamp = pc.user_data().GetAuthTokensTimestamp();
+    ASSERT_NE(post_tokens_timestamp, pre_tokens_timestamp);
+    ASSERT_TRUE(tokens_timestamp_dt.FromISO8601(post_tokens_timestamp));
+    ASSERT_NEAR(tokens_timestamp_dt.MillisSinceEpoch(), datetime::DateTime::Now().MillisSinceEpoch(), 5000) << "Try resyncing your local clock";
 
     // Different account, good credentials
+    pre_tokens_timestamp = pc.user_data().GetAuthTokensTimestamp();
+    // Sleep long enough to be sure we'll get a different tokens timestamp (with second resolution)
+    this_thread::sleep_for(chrono::milliseconds(2000));
     res_login = pc.AccountLogin(TEST_ACCOUNT_TWO_USERNAME, TEST_ACCOUNT_TWO_PASSWORD);
     ASSERT_TRUE(res_login);
     ASSERT_EQ(res_login->status, Status::Success);
@@ -1851,6 +1886,10 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
     ASSERT_NE(pc.user_data().GetAuthTokens()["earner"], prev_earner_token);
     ASSERT_EQ(pc.Balance(), 0); // we haven't yet done a RefreshState
+    post_tokens_timestamp = pc.user_data().GetAuthTokensTimestamp();
+    ASSERT_NE(post_tokens_timestamp, pre_tokens_timestamp);
+    ASSERT_TRUE(tokens_timestamp_dt.FromISO8601(post_tokens_timestamp));
+    ASSERT_NEAR(tokens_timestamp_dt.MillisSinceEpoch(), datetime::DateTime::Now().MillisSinceEpoch(), 5000) << "Try resyncing your local clock";
 
     res_refresh = pc.RefreshState({});
     ASSERT_TRUE(res_refresh);

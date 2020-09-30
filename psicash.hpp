@@ -79,7 +79,7 @@ struct HTTPResult {
     // The contents of the response body, if any.
     std::string body;
 
-    // The value of the response Date header.
+    // The value of the response Date header. (RFC 7231 format)
     std::string date;
 
     // Any error message relating to an unsuccessful network attempt;
@@ -459,7 +459,7 @@ protected:
 
     error::Result<psicash::Purchase> PurchaseFromJSON(const nlohmann::json& j) const;
 
-    std::string CommaDelimitTokens() const;
+    std::string CommaDelimitTokens(const std::vector<std::string>& types) const;
 
 protected:
     bool test_;

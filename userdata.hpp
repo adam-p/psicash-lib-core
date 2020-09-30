@@ -85,7 +85,9 @@ public:
     void UpdatePurchaseLocalTimeExpiry(Purchase& purchase) const;
 
     AuthTokens GetAuthTokens() const;
-    error::Error SetAuthTokens(const AuthTokens& v, bool is_account);
+    /// Value is undefined (but safe) if there are no auth tokens.
+    std::string GetAuthTokensTimestamp() const;
+    error::Error SetAuthTokens(const AuthTokens& v, const std::string& timestamp, bool is_account);
     /// valid_token_types is of the form {"tokenvalueABCD0123": true, ...}
     error::Error CullAuthTokens(const std::map<std::string, bool>& valid_tokens);
 
