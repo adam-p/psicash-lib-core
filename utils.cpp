@@ -75,4 +75,23 @@ std::string RandomID() {
    return s;
 }
 
+// Note that this _only_ works for plain ASCII strings.
+static std::string ToLowerASCII(const std::string& s) {
+   std::ostringstream ss;
+   for (auto c : s) {
+       ss << std::tolower(c);
+   }
+   return ss.str();
+}
+
+std::string FindHeaderValue(const std::map<std::string, std::vector<std::string>>& headers, const std::string& key) {
+    auto lower_key = ToLowerASCII(key);
+    for (const auto& entry : headers) {
+        if (lower_key == ToLowerASCII(entry.first)) {
+            return entry.second.empty() ? "" : entry.second.front();
+        }
+    }
+    return "";
+}
+
 }

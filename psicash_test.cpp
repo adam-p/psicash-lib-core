@@ -104,10 +104,14 @@ class TestPsiCash : public ::testing::Test, public TempDir {
                 }
 
                 // Look for the Date header
-                regex date_regex("^Date: (.+)$",
-                                 regex_constants::ECMAScript | regex_constants::icase);
-                if (regex_match(line, match_pieces, date_regex)) {
-                    result.date = match_pieces[1].str();
+                regex header_regex("^([^:]+): (.+)$",
+                                   regex_constants::ECMAScript | regex_constants::icase);
+                if (regex_match(line, match_pieces, header_regex)) {
+                    auto key = match_pieces[1].str();
+                    if (result.headers.count(key) == 0) {
+                        result.headers[key] = vector<string>();
+                    }
+                    result.headers[key].push_back(match_pieces[2].str());
                 }
             }
 

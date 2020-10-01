@@ -73,6 +73,8 @@ static constexpr const char* kLandingPageParamKey = "psicash";
 static constexpr const char* kMethodGET = "GET";
 static constexpr const char* kMethodPOST = "POST";
 
+static constexpr const char* kDateHeaderKey = "Date";
+
 //
 // PsiCash class implementation
 //
@@ -507,9 +509,10 @@ Result<HTTPResult> PsiCash::MakeHTTPRequestWithRetry(
         }
 
         // We just got a fresh server timestamp, so set the server time diff
-        if (!http_result.date.empty()) {
+        auto date_header = utils::FindHeaderValue(http_result.headers, kDateHeaderKey);
+        if (!date_header.empty()) {
             datetime::DateTime server_datetime;
-            if (server_datetime.FromRFC7231(http_result.date)) {
+            if (server_datetime.FromRFC7231(date_header)) {
                 // We don't care about the return value at this point.
                 (void)user_data_->SetServerTimeDiff(server_datetime);
             }
@@ -633,7 +636,8 @@ Result<Status> PsiCash::NewTracker() {
         }
 
         datetime::DateTime server_timestamp;
-        if (!server_timestamp.FromRFC7231(result->date)) {
+        auto date_header = utils::FindHeaderValue(result->headers, kDateHeaderKey);
+        if (!server_timestamp.FromRFC7231(date_header)) {
             // The Date header should always be present and should always be the expected format
             assert(false);
             // This is bad and unexpected, but we can fall back to using a local timestamp
@@ -656,7 +660,8 @@ Result<Status> PsiCash::NewTracker() {
     }
 
     return MakeCriticalError(utils::Stringer(
-        "request returned unexpected result code: ", result->code));
+            "request returned unexpected result code: ", result->code, "; ",
+            result->body, "; ", json(result->headers).dump()));
 }
 
 Result<Status> PsiCash::RefreshState(const std::vector<std::string>& purchase_classes) {
@@ -842,7 +847,8 @@ Result<Status> PsiCash::RefreshState(
     }
 
     return MakeCriticalError(utils::Stringer(
-        "request returned unexpected result code: ", result->code));
+            "request returned unexpected result code: ", result->code, "; ",
+            result->body, "; ", json(result->headers).dump()));
 }
 
 Result<PsiCash::NewExpiringPurchaseResponse> PsiCash::NewExpiringPurchase(
@@ -1003,7 +1009,8 @@ Result<PsiCash::NewExpiringPurchaseResponse> PsiCash::NewExpiringPurchase(
     }
 
     return MakeCriticalError(utils::Stringer(
-        "request returned unexpected result code: ", result->code));
+            "request returned unexpected result code: ", result->code, "; ",
+            result->body, "; ", json(result->headers).dump()));
 }
 
 error::Error PsiCash::AccountLogout() {
@@ -1111,7 +1118,8 @@ error::Result<PsiCash::AccountLoginResponse> PsiCash::AccountLogin(
         }
 
         datetime::DateTime server_timestamp;
-        if (!server_timestamp.FromRFC7231(result->date)) {
+        auto date_header = utils::FindHeaderValue(result->headers, kDateHeaderKey);
+        if (!server_timestamp.FromRFC7231(date_header)) {
             // The Date header should always be present and should always be the expected format
             assert(false);
             // This is bad and unexpected, but we can fall back to using a local timestamp
@@ -1149,7 +1157,8 @@ error::Result<PsiCash::AccountLoginResponse> PsiCash::AccountLogin(
     }
 
     return MakeCriticalError(utils::Stringer(
-        "request returned unexpected result code: ", result->code));
+            "request returned unexpected result code: ", result->code, "; ",
+            result->body, "; ", json(result->headers).dump()));
 }
 
 // Enable JSON de/serializing of PurchasePrice.

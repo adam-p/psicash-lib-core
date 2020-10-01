@@ -79,8 +79,8 @@ struct HTTPResult {
     // The contents of the response body, if any.
     std::string body;
 
-    // The value of the response Date header. (RFC 7231 format)
-    std::string date;
+    // The response headers.
+    std::map<std::string, std::vector<std::string>> headers;
 
     // Any error message relating to an unsuccessful network attempt;
     // must be empty if the request succeeded (regardless of status code).

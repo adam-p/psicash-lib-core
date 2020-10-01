@@ -21,6 +21,8 @@
 #define PSICASHLIB_UTILS_H
 
 #include <string>
+#include <map>
+#include <vector>
 #include <sstream>
 
 
@@ -53,6 +55,11 @@ bool FileExists(const std::string& filename);
 
 /// Generates a large random ID.
 std::string RandomID();
+
+/// Finds the value of the header with the given key in `headers` (case-insensitive).
+/// Returns the value if found, or empty string if not found.
+/// If there are multiple header values for the key, the first one is returned.
+std::string FindHeaderValue(const std::map<std::string, std::vector<std::string>>& headers, const std::string& key);
 
 }
 

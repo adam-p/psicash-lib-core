@@ -55,6 +55,10 @@ datetime::TimePoint NormalizeTimePoint(const datetime::Clock::time_point& tp) {
 }
 
 bool FromString(const char* parseSpecifier, const string& s, TimePoint& tp) {
+    if (s.empty()) {
+        return false;
+    }
+
     TimePoint temp;
     istringstream ss(s);
     ss.imbue(std::locale::classic());
