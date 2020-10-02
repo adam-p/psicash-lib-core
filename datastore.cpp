@@ -160,6 +160,14 @@ static Result<json> FileLoad(const string& file_path) {
         // We'll continue on with the rest of the logic, which will read the new empty file.
     }
 
+    uint64_t file_size = 0;
+    if (auto err = utils::FileSize(file_path, file_size)) {
+        return WrapError(err, utils::Stringer("unable to get file size; errno=", errno));
+    }
+    if (file_size == 0) {
+        return MakeCriticalError("file size is zero");
+    }
+
     ifstream f;
     f.open(file_path, ios::in | ios::binary);
     if (!f) {

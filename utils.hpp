@@ -24,6 +24,7 @@
 #include <map>
 #include <vector>
 #include <sstream>
+#include "error.hpp"
 
 
 namespace utils {
@@ -52,6 +53,9 @@ std::string Stringer(const T& value, const Args& ... args) {
 
 /// Tests if the given filepath+name exists.
 bool FileExists(const std::string& filename);
+
+/// Gets the size of the file at the given path.
+psicash::error::Error FileSize(const std::string& path, uint64_t& o_size);
 
 /// Generates a large random ID.
 std::string RandomID();

@@ -18,7 +18,11 @@
  */
 
 #include <random>
+#include <iostream>
+#include <fstream>
+#include <limits>
 #include "utils.hpp"
+#include "error.hpp"
 
 #ifdef _WIN32
    #include <io.h>
@@ -26,6 +30,9 @@
 #else
    #include <unistd.h>
 #endif
+
+using namespace std;
+using namespace psicash;
 
 namespace utils {
 
@@ -76,15 +83,15 @@ std::string RandomID() {
 }
 
 // Note that this _only_ works for plain ASCII strings.
-static std::string ToLowerASCII(const std::string& s) {
-   std::ostringstream ss;
+static string ToLowerASCII(const string& s) {
+   ostringstream ss;
    for (auto c : s) {
-       ss << std::tolower(c);
+       ss << tolower(c);
    }
    return ss.str();
 }
 
-std::string FindHeaderValue(const std::map<std::string, std::vector<std::string>>& headers, const std::string& key) {
+string FindHeaderValue(const map<string, vector<string>>& headers, const string& key) {
     auto lower_key = ToLowerASCII(key);
     for (const auto& entry : headers) {
         if (lower_key == ToLowerASCII(entry.first)) {
@@ -92,6 +99,24 @@ std::string FindHeaderValue(const std::map<std::string, std::vector<std::string>
         }
     }
     return "";
+}
+
+// Adapted from https://stackoverflow.com/a/22986486/729729
+error::Error FileSize(const string& path, uint64_t& o_size) {
+    o_size = 0;
+
+    ifstream f;
+    f.open(path, ios::in | ios::binary);
+    if (!f) {
+        return error::MakeCriticalError(utils::Stringer("file open failed; errno=", errno));
+    }
+
+    f.ignore(numeric_limits<streamsize>::max());
+    auto length = f.gcount();
+    f.close();
+
+    o_size = (uint64_t)length;
+    return error::nullerr;
 }
 
 }
