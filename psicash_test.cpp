@@ -1705,6 +1705,50 @@ TEST_F(TestPsiCash, NewExpiringPurchase) {
     ASSERT_EQ(pc.Balance(), initial_balance);
 }
 
+TEST_F(TestPsiCash, NewExpiringPurchasePauserCommitBug) {
+    // Bug test: When a kHTTPStatusTooManyRequests response (or any non-success, but
+    // especially that one) was received, the updated balance received in the response
+    // would be written to the datastore, but the WritePauser would not be committed, so
+    // the change would be lost and the UI wouldn't update until a RefreshState request
+    // was made.
+
+    PsiCashTester pc;
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+    ASSERT_FALSE(err);
+    auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::Success);
+    auto refresh_result = pc.RefreshState({});
+    ASSERT_TRUE(refresh_result);
+    ASSERT_TRUE(pc.IsAccount());
+    auto balance = pc.Balance();
+    err = MAKE_1T_REWARD(pc, 2); // make sure we have enough balance for two purchases
+    ASSERT_FALSE(err) << err;
+    refresh_result = pc.RefreshState({});
+    ASSERT_TRUE(refresh_result);
+    ASSERT_EQ(pc.Balance(), balance + ONE_TRILLION + ONE_TRILLION);
+
+    // Make a purchase that's valid long enough for us to have a conflict.
+    balance = pc.Balance();
+    auto purchase_result = pc.NewExpiringPurchase(TEST_DEBIT_TRANSACTION_CLASS, TEST_ONE_TRILLION_TEN_SECOND_DISTINGUISHER, ONE_TRILLION);
+    ASSERT_TRUE(purchase_result);
+    ASSERT_EQ(purchase_result->status, Status::Success);
+    ASSERT_EQ(pc.Balance(), balance - ONE_TRILLION);
+
+    // Mess with the balance so we can see that it gets updated by the 429 purchase attempt
+    balance = pc.Balance();
+    pc.user_data().SetBalance(1);
+    ASSERT_EQ(pc.Balance(), 1);
+
+    // Now make a conflicting purchase
+    purchase_result = pc.NewExpiringPurchase(TEST_DEBIT_TRANSACTION_CLASS, TEST_ONE_TRILLION_TEN_SECOND_DISTINGUISHER, ONE_TRILLION);
+    ASSERT_TRUE(purchase_result);
+    ASSERT_EQ(purchase_result->status, Status::ExistingTransaction);
+
+    // Make sure the balance was updated
+    ASSERT_EQ(pc.Balance(), balance);
+}
+
 TEST_F(TestPsiCash, NewExpiringPurchaseMutators) {
     PsiCashTester pc;
     auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);

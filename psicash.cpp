@@ -878,7 +878,9 @@ Result<PsiCash::NewExpiringPurchaseResponse> PsiCash::NewExpiringPurchase(
     datetime::DateTime server_expiry;
 
     // Set our new data in a single write.
+    // Note that any early return will cause updates to roll back.
     UserData::WritePauser pauser(*user_data_);
+    optional<PsiCash::NewExpiringPurchaseResponse> response;
 
     // These statuses require the response body to be parsed
     if (result->code == kHTTPStatusOK ||
@@ -974,43 +976,47 @@ Result<PsiCash::NewExpiringPurchaseResponse> PsiCash::NewExpiringPurchase(
             return WrapError(err, "AddPurchase failed");
         }
 
-        if (auto err = pauser.Commit()) {
-            return WrapError(err, "UserData write failed");
-        }
-
-        return PsiCash::NewExpiringPurchaseResponse{
+        response = PsiCash::NewExpiringPurchaseResponse{
                 Status::Success,
                 purchase
         };
     } else if (result->code == kHTTPStatusTooManyRequests) {
-        return PsiCash::NewExpiringPurchaseResponse{
+        response = PsiCash::NewExpiringPurchaseResponse{
                 Status::ExistingTransaction
         };
     } else if (result->code == kHTTPStatusPaymentRequired) {
-        return PsiCash::NewExpiringPurchaseResponse{
+        response = PsiCash::NewExpiringPurchaseResponse{
                 Status::InsufficientBalance
         };
     } else if (result->code == kHTTPStatusConflict) {
-        return PsiCash::NewExpiringPurchaseResponse{
+        response = PsiCash::NewExpiringPurchaseResponse{
                 Status::TransactionAmountMismatch
         };
     } else if (result->code == kHTTPStatusNotFound) {
-        return PsiCash::NewExpiringPurchaseResponse{
+        response = PsiCash::NewExpiringPurchaseResponse{
                 Status::TransactionTypeNotFound
         };
     } else if (result->code == kHTTPStatusUnauthorized) {
-        return PsiCash::NewExpiringPurchaseResponse{
+        response = PsiCash::NewExpiringPurchaseResponse{
                 Status::InvalidTokens
         };
     } else if (IsServerError(result->code)) {
-        return PsiCash::NewExpiringPurchaseResponse{
+        response = PsiCash::NewExpiringPurchaseResponse{
                 Status::ServerError
         };
     }
+    else {
+        return MakeCriticalError(utils::Stringer(
+                "request returned unexpected result code: ", result->code, "; ",
+                result->body, "; ", json(result->headers).dump()));
+    }
 
-    return MakeCriticalError(utils::Stringer(
-            "request returned unexpected result code: ", result->code, "; ",
-            result->body, "; ", json(result->headers).dump()));
+    if (auto err = pauser.Commit()) {
+        return WrapError(err, "UserData write failed");
+    }
+
+    assert(response);
+    return *response;
 }
 
 error::Error PsiCash::AccountLogout() {
