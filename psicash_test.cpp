@@ -1871,8 +1871,8 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_TRUE(res_login) << res_login.error();
     ASSERT_EQ(res_login->status, Status::Success);
     ASSERT_TRUE(pc.IsAccount());
-    ASSERT_EQ(pc.ValidTokenTypes().size(), 3);
-    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
+    ASSERT_EQ(pc.ValidTokenTypes().size(), 4);
+    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator"), Contains("logout")));
     ASSERT_EQ(pc.Balance(), 0); // we haven't called RefreshState yet
     auto prev_earner_token = pc.user_data().GetAuthTokens()["earner"];
 
@@ -1893,8 +1893,8 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_EQ(res_login->status, Status::InvalidCredentials);
     // Login state should not have changed
     ASSERT_TRUE(pc.IsAccount());
-    ASSERT_EQ(pc.ValidTokenTypes().size(), 3);
-    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
+    ASSERT_EQ(pc.ValidTokenTypes().size(), 4);
+    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator"), Contains("logout")));
 
     // Good username, bad password
     res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, "this is a bad password");
@@ -1902,8 +1902,8 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_EQ(res_login->status, Status::InvalidCredentials);
     // Login state should not have changed
     ASSERT_TRUE(pc.IsAccount());
-    ASSERT_EQ(pc.ValidTokenTypes().size(), 3);
-    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
+    ASSERT_EQ(pc.ValidTokenTypes().size(), 4);
+    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator"), Contains("logout")));
 
     // Log in again with the same account
     pre_tokens_timestamp = pc.user_data().GetAuthTokensTimestamp();
@@ -1913,8 +1913,8 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_TRUE(res_login);
     ASSERT_EQ(res_login->status, Status::Success);
     ASSERT_TRUE(pc.IsAccount());
-    ASSERT_EQ(pc.ValidTokenTypes().size(), 3);
-    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
+    ASSERT_EQ(pc.ValidTokenTypes().size(), 4);
+    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator"), Contains("logout")));
     ASSERT_NE(pc.user_data().GetAuthTokens()["earner"], prev_earner_token); // should get a different token
     ASSERT_EQ(pc.Balance(), 0); // we haven't yet done a RefreshState
     post_tokens_timestamp = pc.user_data().GetAuthTokensTimestamp();
@@ -1930,8 +1930,8 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_TRUE(res_login);
     ASSERT_EQ(res_login->status, Status::Success);
     ASSERT_TRUE(pc.IsAccount());
-    ASSERT_EQ(pc.ValidTokenTypes().size(), 3);
-    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
+    ASSERT_EQ(pc.ValidTokenTypes().size(), 4);
+    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator"), Contains("logout")));
     ASSERT_NE(pc.user_data().GetAuthTokens()["earner"], prev_earner_token);
     ASSERT_EQ(pc.Balance(), 0); // we haven't yet done a RefreshState
     post_tokens_timestamp = pc.user_data().GetAuthTokensTimestamp();
@@ -1948,8 +1948,8 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_TRUE(res_login) << res_login.error();
     ASSERT_EQ(res_login->status, Status::Success);
     ASSERT_TRUE(pc.IsAccount());
-    ASSERT_EQ(pc.ValidTokenTypes().size(), 3);
-    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
+    ASSERT_EQ(pc.ValidTokenTypes().size(), 4);
+    ASSERT_THAT(pc.ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator"), Contains("logout")));
     ASSERT_NE(pc.user_data().GetAuthTokens()["earner"], prev_earner_token);
     ASSERT_EQ(pc.Balance(), 0); // we haven't yet done a RefreshState
 
@@ -2089,7 +2089,7 @@ TEST_F(TestPsiCash, AccountLogout) {
 
     // Log in with good credentials
     auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
-    ASSERT_TRUE(res_login);
+    ASSERT_TRUE(res_login) << res_login.error();
     ASSERT_EQ(res_login->status, Status::Success);
     ASSERT_TRUE(pc.IsAccount());
     ASSERT_GE(pc.ValidTokenTypes().size(), 3);

@@ -47,6 +47,7 @@ const char* const kEarnerTokenType = "earner";
 const char* const kSpenderTokenType = "spender";
 const char* const kIndicatorTokenType = "indicator";
 const char* const kAccountTokenType = "account";
+const char* const kLogoutTokenType = "logout";
 
 const char* const kTransactionIDZero = "";
 
@@ -585,16 +586,13 @@ Result<HTTPParams> PsiCash::BuildRequestParams(
 /// Returns our auth tokens in comma-delimited format. If types is `{}`, all tokens will
 /// be included; otherwise only tokens of the types specified will be included.
 std::string PsiCash::CommaDelimitTokens(const std::vector<std::string>& types) const {
-    string s;
+    vector<string> tokens;
     for (const auto& at : user_data_->GetAuthTokens()) {
         if (types.empty() || std::find(types.begin(), types.end(), at.first) != types.end()) {
-            if (!s.empty()) {
-                s += ",";
-            }
-            s += at.second;
+            tokens.push_back(at.second);
         }
     }
-    return s;
+    return utils::Join(tokens, ",");
 }
 
 // Get new tracker tokens from the server. This effectively gives us a new identity.
@@ -1066,13 +1064,15 @@ error::Result<PsiCash::AccountLoginResponse> PsiCash::AccountLogin(
         const std::string& utf8_password) {
     MUST_BE_INITIALIZED;
 
-    static const string token_types = utils::Stringer(kEarnerTokenType, ",", kSpenderTokenType, ",", kIndicatorTokenType);
+    static const vector<string> token_types = {kEarnerTokenType, kSpenderTokenType, kIndicatorTokenType, kLogoutTokenType};
+    static const string token_types_str = utils::Join(token_types, ",");
+
     json body =
         {
             {"username", utf8_username},
             {"password", utf8_password},
             {"instanceID", user_data_->GetInstanceID()},
-            {"tokenTypes", token_types},
+            {"tokenTypes", token_types_str},
             {"oldTokens", CommaDelimitTokens({})}
         };
 
@@ -1118,7 +1118,7 @@ error::Result<PsiCash::AccountLoginResponse> PsiCash::AccountLogin(
         }
 
         // Sanity check
-        if (auth_tokens.size() < 3) {
+        if (auth_tokens.size() < token_types.size()) {
             return MakeCriticalError(
                     utils::Stringer("bad number of tokens received: ", auth_tokens.size()));
         }

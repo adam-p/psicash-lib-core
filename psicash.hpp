@@ -96,6 +96,7 @@ extern const char* const kEarnerTokenType;
 extern const char* const kSpenderTokenType;
 extern const char* const kIndicatorTokenType;
 extern const char* const kAccountTokenType;
+extern const char* const kLogoutTokenType;
 
 using TokenTypes = std::vector<std::string>;
 
