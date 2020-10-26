@@ -308,6 +308,29 @@ TEST_F(TestUserData, AuthTokens)
     ASSERT_EQ(want, got_tokens);
 }
 
+TEST_F(TestUserData, ValidTokenTypes) {
+    UserData ud;
+    auto err = ud.Init(GetTempDir().c_str(), dev);
+    ASSERT_FALSE(err);
+
+    ASSERT_EQ(ud.ValidTokenTypes().size(), 0);
+
+    AuthTokens at = {{"a", "a"}, {"b", "b"}, {"c", "c"}};
+    err = ud.SetAuthTokens(at, "value irrelevant", false);
+    auto vtt = ud.ValidTokenTypes();
+    ASSERT_EQ(vtt.size(), 3);
+    for (const auto& k : vtt) {
+        ASSERT_EQ(at.count(k), 1);
+        at.erase(k);
+    }
+    ASSERT_EQ(at.size(), 0); // we should have erased all items
+
+    AuthTokens empty;
+    err = ud.SetAuthTokens(empty, "value irrelevant", false);
+    vtt = ud.ValidTokenTypes();
+    ASSERT_EQ(vtt.size(), 0);
+}
+
 TEST_F(TestUserData, IsAccount)
 {
     UserData ud;

@@ -90,6 +90,7 @@ public:
     error::Error SetAuthTokens(const AuthTokens& v, const std::string& timestamp, bool is_account);
     /// valid_token_types is of the form {"tokenvalueABCD0123": true, ...}
     error::Error CullAuthTokens(const std::map<std::string, bool>& valid_tokens);
+    std::vector<std::string> ValidTokenTypes() const;
 
     bool GetIsAccount() const;
     error::Error SetIsAccount(bool v);

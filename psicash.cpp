@@ -167,20 +167,24 @@ Error PsiCash::SetRequestMetadataItem(const string& key, const string& value) {
 // Stored info accessors
 //
 
-TokenTypes PsiCash::ValidTokenTypes() const {
-    TokenTypes tt;
-
+bool PsiCash::HasTokens() const {
+    // Trackers and Accounts both require the same token types (for now).
+    // (Accounts will also havethe "logout" type, but it isn't strictly needed for sane operation.)
+    vector<string> required_token_types = {kEarnerTokenType, kSpenderTokenType, kIndicatorTokenType};
     auto auth_tokens = user_data_->GetAuthTokens();
     for (const auto& it : auth_tokens) {
-        tt.push_back(it.first);
+        auto found = std::find(required_token_types.begin(), required_token_types.end(), it.first);
+        if (found != required_token_types.end()) {
+            required_token_types.erase(found);
+        }
     }
 
-    return tt;
+    return required_token_types.empty();
 }
 
 /// If the user has no tokens, most actions are disallowed. (This can include being in
 /// the is-logged-out-account state.)
-#define TOKENS_REQUIRED if (ValidTokenTypes().empty()) { return MakeCriticalError("user has no valid tokens"); }
+#define TOKENS_REQUIRED     MUST_BE_INITIALIZED if (!HasTokens()) { return MakeCriticalError("user has insufficient tokens"); }
 
 bool PsiCash::IsAccount() const {
     if (user_data_->GetIsLoggedOutAccount()) {
@@ -371,15 +375,10 @@ Result<string> PsiCash::ModifyLandingPage(const string& url_string) const {
     return url.ToString();
 }
 
+// This is just a special case of the landing page format, EXCEPT that tokens MUST be
+// present, or else it's an error.
 Result<string> PsiCash::GetBuyPsiURL() const {
     TOKENS_REQUIRED;
-
-    // This is just a special case of the landing page format, EXCEPT that tokens MUST be
-    // present, or else it's an error.
-    auto auth_tokens = user_data_->GetAuthTokens();
-    if (auth_tokens.count(kEarnerTokenType) == 0) {
-        return MakeNoncriticalError("no earner token available");
-    }
     return ModifyLandingPage("https://buy.psi.cash/");
 }
 
@@ -425,7 +424,7 @@ json PsiCash::GetDiagnosticInfo() const {
 
     j["test"] = test_;
     j["isLoggedOutAccount"] = user_data_->GetIsLoggedOutAccount();
-    j["validTokenTypes"] = ValidTokenTypes();
+    j["validTokenTypes"] = user_data_->ValidTokenTypes();
     j["isAccount"] = IsAccount();
     j["balance"] = Balance();
     j["serverTimeDiff"] = user_data_->GetServerTimeDiff().count(); // in milliseconds
@@ -803,7 +802,7 @@ Result<Status> PsiCash::RefreshState(
 
             // If the account tokens just expired, then we need to go into a logged-out
             // state.
-            if (IsAccount() && ValidTokenTypes().empty()) {
+            if (IsAccount() && !HasTokens()) {
                 user_data_->DeleteUserData(true);
             }
 
@@ -821,7 +820,7 @@ Result<Status> PsiCash::RefreshState(
             return Status::Success;
         }
 
-        if (!ValidTokenTypes().empty()) {
+        if (HasTokens()) {
             // We have a good tracker state.
             return Status::Success;
         }
@@ -853,7 +852,6 @@ Result<PsiCash::NewExpiringPurchaseResponse> PsiCash::NewExpiringPurchase(
         const string& transaction_class,
         const string& distinguisher,
         const int64_t expected_price) {
-    MUST_BE_INITIALIZED;
     TOKENS_REQUIRED;
 
     auto result = MakeHTTPRequestWithRetry(
@@ -1018,7 +1016,6 @@ Result<PsiCash::NewExpiringPurchaseResponse> PsiCash::NewExpiringPurchase(
 }
 
 error::Error PsiCash::AccountLogout() {
-    MUST_BE_INITIALIZED;
     TOKENS_REQUIRED;
 
     if (!IsAccount()) {

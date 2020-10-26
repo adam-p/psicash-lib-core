@@ -232,6 +232,13 @@ error::Error UserData::CullAuthTokens(const std::map<std::string, bool>& valid_t
     return PassError(datastore_.Set(kAuthTokensPtr, good_auth_tokens));
 }
 
+std::vector<std::string> UserData::ValidTokenTypes() const {
+    auto auth_tokens = GetAuthTokens();
+    vector<string> valid_token_types;
+    std::transform(auth_tokens.begin(), auth_tokens.end(), std::back_inserter(valid_token_types), [](const auto& t) -> string { return t.first; });
+    return valid_token_types;
+}
+
 bool UserData::GetIsAccount() const {
     auto v = datastore_.Get<bool>(kIsAccountPtr);
     if (!v) {

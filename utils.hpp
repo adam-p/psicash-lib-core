@@ -31,7 +31,7 @@
 namespace utils {
 
 // From https://stackoverflow.com/a/25386444/729729
-// Can be used like `s = Stringer("lucky ", 42, '!');
+/// Can be used like `s = Stringer("lucky ", 42, '!');
 template<typename T>
 std::string Stringer(const T& value) {
     std::ostringstream oss;
@@ -66,8 +66,8 @@ std::string RandomID();
 /// If there are multiple header values for the key, the first one is returned.
 std::string FindHeaderValue(const std::map<std::string, std::vector<std::string>>& headers, const std::string& key);
 
+// From https://stackoverflow.com/a/5289170/729729
 /// note: delimiter cannot contain NUL characters
-/// From https://stackoverflow.com/a/5289170/729729
 template <typename Range, typename Value = typename Range::value_type>
 std::string Join(Range const& elements, const char *const delimiter) {
     std::ostringstream os;
@@ -84,8 +84,8 @@ std::string Join(Range const& elements, const char *const delimiter) {
     return os.str();
 }
 
+// From https://stackoverflow.com/a/5289170/729729
 /// note: imput is assumed to not contain NUL characters
-/// From https://stackoverflow.com/a/5289170/729729
 template <typename Input, typename Output, typename Value = typename Output::value_type>
 void Split(char delimiter, Output &output, Input const& input) {
     using namespace std;

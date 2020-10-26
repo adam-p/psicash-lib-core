@@ -206,9 +206,12 @@ public:
     // Stored info accessors
     //
 
-    /// Returns the stored valid token types. Like ["spender", "indicator"].
-    /// Will be empty if no tokens are available.
-    TokenTypes ValidTokenTypes() const;
+    /// Returns true if there are sufficient tokens for this library to function on behalf
+    /// of a user. False otherwise.
+    /// If this is false and `IsAccount()` is true, then the user is a logged-out account
+    /// and needs to log in to continue. If this is false and `IsAccount()` is false,
+    /// `RefreshState()` needs to be called to get new Tracker tokens.
+    bool HasTokens() const;
 
     /// Returns the stored info about whether the user is a Tracker or an Account.
     bool IsAccount() const;
