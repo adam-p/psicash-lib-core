@@ -223,10 +223,11 @@ public:
     /// Will be empty if no purchase prices are available.
     PurchasePrices GetPurchasePrices() const;
 
-    /// Returns the set of active purchases, if any.
+    /// Returns all purchases in the local datastore, if any. This may include expired
+    /// purchases.
     Purchases GetPurchases() const;
 
-    /// Returns the set of active purchases that are not expired, if any.
+    /// Returns the set of purchases that are not expired, if any.
     Purchases ActivePurchases() const;
 
     /// Returns all purchase authorizations. If activeOnly is true, only authorizations
