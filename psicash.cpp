@@ -43,12 +43,6 @@ using namespace error;
 
 namespace psicash {
 
-const char* const kEarnerTokenType = "earner";
-const char* const kSpenderTokenType = "spender";
-const char* const kIndicatorTokenType = "indicator";
-const char* const kAccountTokenType = "account";
-const char* const kLogoutTokenType = "logout";
-
 const char* const kTransactionIDZero = "";
 
 namespace prod {
@@ -723,6 +717,9 @@ Result<Status> PsiCash::RefreshState(
         query_items.emplace_back("class", purchase_class);
     }
 
+    // If LastTransactionID is empty, we'll get all transactions.
+    query_items.emplace_back("lastTransactionID", user_data_->GetLastTransactionID());
+
     auto result = MakeHTTPRequestWithRetry(
             kMethodGET,
             "/refresh-state",
@@ -1193,14 +1190,16 @@ bool operator==(const Purchase& lhs, const Purchase& rhs) {
            lhs.distinguisher == rhs.distinguisher &&
            lhs.server_time_expiry == rhs.server_time_expiry &&
            //lhs.local_time_expiry == rhs.local_time_expiry && // Don't include the derived local time in the comparison
-           lhs.authorization == rhs.authorization;
+           lhs.authorization == rhs.authorization &&
+           lhs.server_time_created == rhs.server_time_created;
 }
 
 void to_json(json& j, const Purchase& p) {
     j = json{
-            {"id",            p.id},
-            {"class",         p.transaction_class},
-            {"distinguisher", p.distinguisher}};
+            {"id",                p.id},
+            {"class",             p.transaction_class},
+            {"distinguisher",     p.distinguisher},
+            {"serverTimeCreated", p.server_time_created}};
 
     if (p.authorization) {
         j["authorization"] = *p.authorization;
@@ -1243,6 +1242,14 @@ void from_json(const json& j, Purchase& p) {
     } else {
         p.local_time_expiry = j.at("localTimeExpiry").get<datetime::DateTime>();
     }
+
+    // This field was not added until later versions of the datastore, so may not be present.
+    if (j.contains("serverTimeCreated")) {
+        p.server_time_created = j.at("serverTimeCreated").get<datetime::DateTime>();
+    } else {
+        // Default it to a very long time ago.
+        p.server_time_created = datetime::DateTime(datetime::TimePoint(datetime::DurationFromInt64(1)));
+    }
 }
 
 /// Builds a purchase from server response JSON.
@@ -1250,16 +1257,16 @@ error::Result<psicash::Purchase> PsiCash::PurchaseFromJSON(const json& j) const 
     string transaction_id, transaction_class, transaction_distinguisher, authorization_encoded, transaction_type;
     datetime::DateTime server_expiry;
     try {
-        transaction_id = j["TransactionID"].get<string>();
-        transaction_class = j["Class"].get<string>();
-        transaction_distinguisher = j["Distinguisher"].get<string>();
+        transaction_id = j.at("TransactionID").get<string>();
+        transaction_class = j.at("Class").get<string>();
+        transaction_distinguisher = j.at("Distinguisher").get<string>();
 
-        if (j["Authorization"].is_string()) {
+        if (j.at("Authorization").is_string()) {
             authorization_encoded = j["Authorization"].get<string>();
         }
 
-        if (j["/TransactionResponse/Values/Expires"_json_pointer].is_string()) {
-            auto expiry_string = j["TransactionResponse"]["Values"]["Expires"].get<string>();
+        if (j.at("/TransactionResponse/Values/Expires"_json_pointer).is_string()) {
+            auto expiry_string = j["/TransactionResponse/Values/Expires"_json_pointer].get<string>();
             if (!server_expiry.FromISO8601(expiry_string)) {
                 return MakeCriticalError(
                         "failed to parse TransactionResponse.Values.Expires; got "s +

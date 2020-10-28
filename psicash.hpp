@@ -91,15 +91,6 @@ struct HTTPResult {
 // This is the signature for the HTTP Requester callback provided by the native consumer.
 using MakeHTTPRequestFn = std::function<HTTPResult(const HTTPParams&)>;
 
-// These are the possible token types.
-extern const char* const kEarnerTokenType;
-extern const char* const kSpenderTokenType;
-extern const char* const kIndicatorTokenType;
-extern const char* const kAccountTokenType;
-extern const char* const kLogoutTokenType;
-
-using TokenTypes = std::vector<std::string>;
-
 struct PurchasePrice {
     std::string transaction_class;
     std::string distinguisher;
@@ -138,6 +129,7 @@ struct Purchase {
     nonstd::optional<datetime::DateTime> server_time_expiry;
     nonstd::optional<datetime::DateTime> local_time_expiry;
     nonstd::optional<Authorization> authorization;
+    datetime::DateTime server_time_created;
 
     friend bool operator==(const Purchase& lhs, const Purchase& rhs);
     friend void to_json(nlohmann::json& j, const Purchase& p);
@@ -296,8 +288,7 @@ public:
 
     If the user has an Account, then it is possible some or all tokens will be invalid
     (they expire at different rates). Login may be necessary before spending, etc.
-    (It's even possible that validTokenTypes is empty -- i.e., there are no valid
-    tokens.)
+    (It's even possible that hasTokens is false.)
 
     If the user has an Account, then it is possible some or all tokens will be invalid
     (they may expire at different rates) and multiple states are possible:
@@ -325,7 +316,7 @@ public:
     Possible status codes:
 
     • Success: Call was successful. Tokens may now be available (depending on if
-      IsAccount is true, ValidTokenTypes should be checked, as a login may be required).
+      IsAccount is true, HasTokens should be checked, as a login may be required).
 
     • ServerError: The server returned 500 error response. Note that the request has
       already been retried internally and any further retry should not be immediate.

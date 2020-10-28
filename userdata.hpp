@@ -32,6 +32,15 @@ namespace psicash {
 extern const nlohmann::json::json_pointer kRequestMetadataPtr; // only for use in template method below
 
 using AuthTokens = std::map<std::string, std::string>;
+using TokenTypes = std::vector<std::string>;
+
+// These are the possible token types.
+extern const char* const kEarnerTokenType;
+extern const char* const kSpenderTokenType;
+extern const char* const kIndicatorTokenType;
+extern const char* const kAccountTokenType;
+extern const char* const kLogoutTokenType;
+
 
 /// Storage and retrieval (and some processing) of PsiCash user data/state.
 /// UserData operations are threadsafe (via Datastore).
@@ -90,7 +99,7 @@ public:
     error::Error SetAuthTokens(const AuthTokens& v, const std::string& timestamp, bool is_account);
     /// valid_token_types is of the form {"tokenvalueABCD0123": true, ...}
     error::Error CullAuthTokens(const std::map<std::string, bool>& valid_tokens);
-    std::vector<std::string> ValidTokenTypes() const;
+    psicash::TokenTypes ValidTokenTypes() const;
 
     bool GetIsAccount() const;
     error::Error SetIsAccount(bool v);

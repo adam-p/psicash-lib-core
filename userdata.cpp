@@ -64,6 +64,15 @@ static const auto kLastTransactionIDPtr = kUserPtr / LAST_TRANSACTION_ID;
 static const char* REQUEST_METADATA = "requestMetadata";
 const json::json_pointer kRequestMetadataPtr = kUserPtr / REQUEST_METADATA; // used in header, so not static
 
+
+// These are the possible token types.
+const char* const kEarnerTokenType = "earner";
+const char* const kSpenderTokenType = "spender";
+const char* const kIndicatorTokenType = "indicator";
+const char* const kAccountTokenType = "account";
+const char* const kLogoutTokenType = "logout";
+
+
 UserData::UserData() {
 }
 
@@ -232,7 +241,7 @@ error::Error UserData::CullAuthTokens(const std::map<std::string, bool>& valid_t
     return PassError(datastore_.Set(kAuthTokensPtr, good_auth_tokens));
 }
 
-std::vector<std::string> UserData::ValidTokenTypes() const {
+psicash::TokenTypes UserData::ValidTokenTypes() const {
     auto auth_tokens = GetAuthTokens();
     vector<string> valid_token_types;
     std::transform(auth_tokens.begin(), auth_tokens.end(), std::back_inserter(valid_token_types), [](const auto& t) -> string { return t.first; });
@@ -290,21 +299,38 @@ error::Error UserData::SetPurchases(const Purchases& v) {
 }
 
 error::Error UserData::AddPurchase(const Purchase& v) {
+    // We're not going to assume too much about the incoming purchase: it might be a
+    // duplicate, or it might not be as new as the newest purchase we already have.
+
+    // Assumption: If we receive a duplicate purchase, it will have the same member values.
+    // Assumption: The purchases vector is already sorted by created date ascending.
+
+    // TODO: If/when we start dealing with large numbers of purchases being added,
+    // (e.g., when we have a large number of a non-instance-specific purchases and the
+    // user is doing a full retrieve), the work here should be done more efficiently
+    // (like in a batch).
+    // (Of course, we might also have to rethink our datastore at that point.)
+
     auto purchases = GetPurchases();
-    // Prevent duplicate insertion
-    for (const auto& p : purchases) {
-        if (p.id == v.id) {
+    auto iter = purchases.begin();
+    for (; iter != purchases.end(); iter++) {
+        if ((*iter).id == v.id) {
+            // This is a duplicate -- nothing to do.
             return error::nullerr;
+        }
+        else if ((*iter).server_time_created > v.server_time_created) {
+            // We have found the sorted insertion point.
+            break;
         }
     }
 
-    purchases.push_back(v);
+    purchases.insert(iter, v);
 
     // Pause to set Purchases and LastTransactionID in one write
     WritePauser pauser(*this);
     // These don't write, so have no meaningful return
     (void)SetPurchases(purchases);
-    (void)SetLastTransactionID(v.id);
+    (void)SetLastTransactionID(purchases.back().id);
     return PassError(pauser.Commit()); // write
 }
 
