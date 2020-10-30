@@ -431,6 +431,8 @@ TEST_F(TestUserData, Purchases)
 
 TEST_F(TestUserData, AddPurchase)
 {
+    // This also tests Get/SetLastTransactionID (as Set isn't public)
+
     UserData ud;
     auto err = ud.Init(GetTempDir().c_str(), dev);
     ASSERT_FALSE(err);
@@ -449,7 +451,9 @@ TEST_F(TestUserData, AddPurchase)
 
     // Start with a subset
     Purchases want = {final_want[0], final_want[2]};
-    err = ud.SetPurchases(want);
+    err = ud.AddPurchase(want[0]);
+    ASSERT_FALSE(err);
+    err = ud.AddPurchase(want[1]);
     ASSERT_FALSE(err);
     auto got = ud.GetPurchases();
     ASSERT_EQ(got, want);
@@ -469,7 +473,8 @@ TEST_F(TestUserData, AddPurchase)
     ASSERT_FALSE(err);
     got = ud.GetPurchases();
     ASSERT_EQ(got, want);
-    ASSERT_EQ(ud.GetLastTransactionID(), "id3");
+    // Even though id1 is not the newest, it was added last and therefore will be the LastTransactionID. See comment in AddPurchase for details.
+    ASSERT_EQ(ud.GetLastTransactionID(), "id1");
 
     // Add a duplicate purchase
     want = {final_want[0], final_want[1], final_want[2], final_want[3]};
@@ -477,25 +482,7 @@ TEST_F(TestUserData, AddPurchase)
     ASSERT_FALSE(err);
     got = ud.GetPurchases();
     ASSERT_EQ(got, want);
-    ASSERT_EQ(ud.GetLastTransactionID(), "id3");
-}
-
-TEST_F(TestUserData, LastTransactionID)
-{
-    UserData ud;
-    auto err = ud.Init(GetTempDir().c_str(), dev);
-    ASSERT_FALSE(err);
-
-    // Check default value
-    auto v = ud.GetLastTransactionID();
-    ASSERT_EQ(v, kTransactionIDZero);
-
-    // Set then get
-    TransactionID want = "LastTransactionID";
-    err = ud.SetLastTransactionID(want);
-    ASSERT_FALSE(err);
-    auto got = ud.GetLastTransactionID();
-    ASSERT_EQ(got, want);
+    ASSERT_EQ(ud.GetLastTransactionID(), "id2");
 }
 
 TEST_F(TestUserData, Metadata)

@@ -302,8 +302,17 @@ error::Error UserData::AddPurchase(const Purchase& v) {
     // We're not going to assume too much about the incoming purchase: it might be a
     // duplicate, or it might not be as new as the newest purchase we already have.
 
-    // Assumption: If we receive a duplicate purchase, it will have the same member values.
     // Assumption: The purchases vector is already sorted by created date ascending.
+    // Assumption: The ID of our purchase argument should become our LastTransactionID.
+    //   This will be true _even if_ there are purchases in our datastore with later
+    //   created dates.
+    //   - If this purchase is being added due to, say, NewExpiringPurchase, then the
+    //     purchase is brand new.
+    //   - If the purchase is being added due to RefreshState retreiving some newer than
+    //     our LastTransactionID, then the argument is newer.
+    //   - If the purchase is being added because our LastTransactionID was corrupt and
+    //     RefreshState is giving us everything, then we need to replace it with the
+    //     purchases we're storing, as we store them.
 
     // TODO: If/when we start dealing with large numbers of purchases being added,
     // (e.g., when we have a large number of a non-instance-specific purchases and the
@@ -312,25 +321,31 @@ error::Error UserData::AddPurchase(const Purchase& v) {
     // (Of course, we might also have to rethink our datastore at that point.)
 
     auto purchases = GetPurchases();
-    auto iter = purchases.begin();
-    for (; iter != purchases.end(); iter++) {
-        if ((*iter).id == v.id) {
-            // This is a duplicate -- nothing to do.
-            return error::nullerr;
+
+    for (auto iter = purchases.begin(); ; iter++) {
+        if (iter == purchases.end()) {
+            // We searched to the end and didn't find a duplicate or insertion point.
+            // Put the new purchase at the end.
+            purchases.insert(iter, v);
+            break;
+        }
+        else if ((*iter).id == v.id) {
+            // This is a duplicate. Update our local copy in case we have bad data.
+            *iter = v;
+            break;
         }
         else if ((*iter).server_time_created > v.server_time_created) {
             // We have found the sorted insertion point.
+            purchases.insert(iter, v);
             break;
         }
     }
-
-    purchases.insert(iter, v);
 
     // Pause to set Purchases and LastTransactionID in one write
     WritePauser pauser(*this);
     // These don't write, so have no meaningful return
     (void)SetPurchases(purchases);
-    (void)SetLastTransactionID(purchases.back().id);
+    (void)SetLastTransactionID(v.id);
     return PassError(pauser.Commit()); // write
 }
 

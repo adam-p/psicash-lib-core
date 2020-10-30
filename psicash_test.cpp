@@ -1557,7 +1557,7 @@ TEST_F(TestPsiCash, NewExpiringPurchase) {
     ASSERT_EQ(pc.Balance(), initial_balance + ONE_TRILLION);
     // Note: this puchase will be valid for 1 second
     auto purchase_result = pc.NewExpiringPurchase(TEST_DEBIT_TRANSACTION_CLASS, TEST_ONE_TRILLION_ONE_SECOND_DISTINGUISHER, ONE_TRILLION);
-    ASSERT_TRUE(purchase_result);
+    ASSERT_TRUE(purchase_result) << purchase_result.error();
     ASSERT_EQ(purchase_result->status, Status::Success);
     ASSERT_TRUE(purchase_result->purchase);
     ASSERT_GT(purchase_result->purchase->id.size(), 0);

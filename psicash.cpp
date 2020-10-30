@@ -783,10 +783,6 @@ Result<Status> PsiCash::RefreshState(
                 user_data_->SetPurchasePrices(purchase_prices);
             }
 
-            if (j["LastTransactionID"].is_string()) {
-                user_data_->SetLastTransactionID(j["LastTransactionID"].get<string>());
-            }
-
             if (j["Purchases"].is_array()) {
                 for (const auto& p : j["Purchases"]) {
                     auto purchaseRes = PurchaseFromJSON(p);
