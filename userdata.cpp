@@ -119,7 +119,7 @@ error::Error UserData::Init(const string& file_store_root, bool dev) {
         }
 
         json newDS = FreshDatastore();
-        (*oldDS).erase("v");
+        oldDS->erase("v");
         newDS[kUserPtr] = *oldDS;
 
         // The v1 datastore also didn't have AuthTokenTimestamp.
@@ -329,12 +329,12 @@ error::Error UserData::AddPurchase(const Purchase& v) {
             purchases.insert(iter, v);
             break;
         }
-        else if ((*iter).id == v.id) {
+        else if (iter->id == v.id) {
             // This is a duplicate. Update our local copy in case we have bad data.
             *iter = v;
             break;
         }
-        else if ((*iter).server_time_created > v.server_time_created) {
+        else if (iter->server_time_created > v.server_time_created) {
             // We have found the sorted insertion point.
             purchases.insert(iter, v);
             break;

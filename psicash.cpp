@@ -471,7 +471,7 @@ Result<HTTPResult> PsiCash::MakeHTTPRequestWithRetry(
     string body_string;
     if (body) {
         try {
-            body_string = (*body).dump(-1, ' ', true);
+            body_string = body->dump(-1, ' ', true);
         }
         catch (json::exception& e) {
             return MakeCriticalError(
@@ -863,13 +863,7 @@ Result<PsiCash::NewExpiringPurchaseResponse> PsiCash::NewExpiringPurchase(
         return WrapError(result.error(), "MakeHTTPRequestWithRetry failed");
     }
 
-    string transaction_id, authorization_encoded, transaction_type;
-    datetime::DateTime server_expiry, server_created;
-
-    // Set our new data in a single write.
-    // Note that any early return will cause updates to roll back.
-    UserData::WritePauser pauser(*user_data_);
-    optional<PsiCash::NewExpiringPurchaseResponse> response;
+    optional<Purchase> purchase;
 
     // These statuses require the response body to be parsed
     if (result->code == kHTTPStatusOK ||
@@ -884,36 +878,39 @@ Result<PsiCash::NewExpiringPurchaseResponse> PsiCash::NewExpiringPurchase(
         try {
             auto j = json::parse(result->body);
 
-            // Many response fields are optional (depending on the presence of the indicator token)
+            // Set our new data in a single write.
+            // Note that any early return will cause updates to roll back.
+            UserData::WritePauser pauser(*user_data_);
 
+            // Balance is present for all non-error responses
             if (j.at("Balance").is_number_integer()) {
                 // We don't care about the return value of this right now
                 (void)user_data_->SetBalance(j.at("Balance").get<int64_t>());
             }
 
-            transaction_id = j.at("TransactionID").get<string>();
+            if (result->code == kHTTPStatusOK) {
+                auto parse_res = PurchaseFromJSON(j, "expiring-purchase");
+                if (!parse_res) {
+                    return WrapError(parse_res.error(), "failed to parse purchase from response JSON");
+                }
 
-            if (!server_created.FromISO8601(j.at("Created").get<string>())) {
-                return MakeCriticalError("failed to parse Created; got "s + j.at("Created").get<string>());
-            }
+                purchase = *parse_res;
 
-            if (j.at("Authorization").is_string()) {
-                authorization_encoded = j.at("Authorization").get<string>();
-            }
+                if (!purchase->server_time_expiry) {
+                    // Purchase expiry is optional, but we're specifically making a New**Expiring**Purchase
+                    return MakeCriticalError("response did not provide valid expiry");
+                }
 
-            if (j.at("/TransactionResponse/Type"_json_pointer).is_string()) {
-                transaction_type = j.at("/TransactionResponse/Type"_json_pointer).get<string>();
-            }
+                // Not checking authorization, as it doesn't apply to all expiring purchases
 
-            if (j.at("/TransactionResponse/Values/Expires"_json_pointer).is_string()) {
-                string expiry_string = j.at("/TransactionResponse/Values/Expires"_json_pointer).get<string>();
-                if (!server_expiry.FromISO8601(expiry_string)) {
-                    return MakeCriticalError("failed to parse TransactionResponse.Values.Expires; got "s + expiry_string);
+                if (auto err = user_data_->AddPurchase(*purchase)) {
+                    return WrapError(err, "AddPurchase failed");
+                }
+
+                if (auto err = pauser.Commit()) {
+                    return WrapError(err, "UserData write failed");
                 }
             }
-
-            // Unused fields
-            //auto transaction_amount = j.at("TransactionAmount").get<int64_t>();
         }
         catch (json::exception& e) {
             return MakeCriticalError(
@@ -921,51 +918,9 @@ Result<PsiCash::NewExpiringPurchaseResponse> PsiCash::NewExpiringPurchase(
         }
     }
 
+    optional<PsiCash::NewExpiringPurchaseResponse> response;
+
     if (result->code == kHTTPStatusOK) {
-        if (transaction_type != "expiring-purchase") {
-            return MakeCriticalError(
-                    ("response contained incorrect TransactionResponse.Type; want 'expiring-purchase', got "s +
-                     transaction_type));
-        }
-        if (transaction_id.empty()) {
-            return MakeCriticalError("response did not provide valid TransactionID");
-        }
-        if (server_expiry.IsZero()) {
-            // Purchase expiry is optional, but we're specifically making a New**Expiring**Purchase
-            return MakeCriticalError(
-                    "response did not provide valid TransactionResponse.Values.Expires");
-        }
-        // Not checking authorization, as it doesn't apply to all expiring purchases
-
-        optional<Authorization> authOptional = nullopt;
-        if (!authorization_encoded.empty()) {
-            auto decodeAuthResult = DecodeAuthorization(authorization_encoded);
-            if (!decodeAuthResult) {
-                // Authorization can be optional, but inability to decode suggests
-                // something is very wrong.
-                return WrapError(decodeAuthResult.error(), "failed to decode Purchase Authorization");
-            }
-            authOptional = *decodeAuthResult;
-        }
-
-        Purchase purchase = {
-            transaction_id,
-            server_created,
-            transaction_class,
-            distinguisher,
-            server_expiry.IsZero() ? nullopt : make_optional(
-                    server_expiry),
-            server_expiry.IsZero() ? nullopt : make_optional(
-                    server_expiry),
-            authOptional
-        };
-
-        user_data_->UpdatePurchaseLocalTimeExpiry(purchase);
-
-        if (auto err = user_data_->AddPurchase(purchase)) {
-            return WrapError(err, "AddPurchase failed");
-        }
-
         response = PsiCash::NewExpiringPurchaseResponse{
                 Status::Success,
                 purchase
@@ -999,10 +954,6 @@ Result<PsiCash::NewExpiringPurchaseResponse> PsiCash::NewExpiringPurchase(
         return MakeCriticalError(utils::Stringer(
                 "request returned unexpected result code: ", result->code, "; ",
                 result->body, "; ", json(result->headers).dump()));
-    }
-
-    if (auto err = pauser.Commit()) {
-        return WrapError(err, "UserData write failed");
     }
 
     assert(response);
@@ -1250,10 +1201,14 @@ void from_json(const json& j, Purchase& p) {
 }
 
 /// Builds a purchase from server response JSON.
-error::Result<psicash::Purchase> PsiCash::PurchaseFromJSON(const json& j) const {
+error::Result<psicash::Purchase> PsiCash::PurchaseFromJSON(const json& j, const string& expected_type/*=""*/) const {
     string transaction_id, transaction_class, transaction_distinguisher, authorization_encoded, transaction_type;
     datetime::DateTime server_expiry, server_created;
     try {
+        if (!expected_type.empty() && expected_type != j.at("/TransactionResponse/Type"_json_pointer).get<string>()) {
+            return MakeCriticalError("expected type mismatch; want '"s + expected_type + "'; got '" + j.at("/TransactionResponse/Type"_json_pointer).get<string>() + "'");
+        }
+
         transaction_id = j.at("TransactionID").get<string>();
         transaction_class = j.at("Class").get<string>();
         transaction_distinguisher = j.at("Distinguisher").get<string>();
@@ -1266,6 +1221,8 @@ error::Result<psicash::Purchase> PsiCash::PurchaseFromJSON(const json& j) const 
             authorization_encoded = j["Authorization"].get<string>();
         }
 
+        // NOTE: The presence of this field depends on the type. Right now we only have
+        // expiring purchases, but that may change in the future.
         if (j.at("/TransactionResponse/Values/Expires"_json_pointer).is_string()) {
             auto expiry_string = j["/TransactionResponse/Values/Expires"_json_pointer].get<string>();
             if (!server_expiry.FromISO8601(expiry_string)) {

@@ -453,7 +453,8 @@ protected:
     error::Result<Status> RefreshState(
       const std::vector<std::string>& purchase_classes, bool allow_recursion);
 
-    error::Result<psicash::Purchase> PurchaseFromJSON(const nlohmann::json& j) const;
+    // If expected_type is empty, no check will be done.
+    error::Result<psicash::Purchase> PurchaseFromJSON(const nlohmann::json& j, const std::string& expected_type="") const;
 
     std::string CommaDelimitTokens(const std::vector<std::string>& types) const;
 

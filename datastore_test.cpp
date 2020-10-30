@@ -511,7 +511,7 @@ TEST_F(TestDatastore, GetFullDS)
 
     j = ds.Get();
     ASSERT_TRUE(j);
-    ASSERT_TRUE((*j).empty());
+    ASSERT_TRUE(j->empty());
 
     string want = "v";
     err = ds.Set("/k"_json_pointer, want);
@@ -519,6 +519,6 @@ TEST_F(TestDatastore, GetFullDS)
 
     j = ds.Get();
     ASSERT_TRUE(j);
-    ASSERT_EQ((*j).at("k").get<string>(), want);
+    ASSERT_EQ(j->at("k").get<string>(), want);
 }
 
