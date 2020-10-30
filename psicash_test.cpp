@@ -463,8 +463,8 @@ TEST_F(TestPsiCash, GetPurchases) {
     ASSERT_TRUE(auth_res);
 
     Purchases ps = {
-            {"id1", "tc1", "d1", datetime::DateTime::Now(), datetime::DateTime::Now(), *auth_res},
-            {"id2", "tc2", "d2", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt}};
+            {"id1", datetime::DateTime::Now(), "tc1", "d1", datetime::DateTime::Now(), datetime::DateTime::Now(), *auth_res},
+            {"id2", datetime::DateTime::Now(), "tc2", "d2", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt}};
 
     err = pc.user_data().SetPurchases(ps);
     ASSERT_FALSE(err);
@@ -491,14 +491,15 @@ TEST_F(TestPsiCash, ActivePurchases) {
     v = pc.ActivePurchases();
     ASSERT_EQ(v.size(), 0);
 
+    auto created = datetime::DateTime(); // value doesn't matter here
     auto before_now = datetime::DateTime::Now().Sub(datetime::Duration(54321));
     auto after_now = datetime::DateTime::Now().Add(datetime::Duration(54321));
 
-    Purchases ps = {{"id1", "tc1", "d1", before_now, nonstd::nullopt, nonstd::nullopt},
-                    {"id2", "tc2", "d2", after_now, nonstd::nullopt, nonstd::nullopt},
-                    {"id3", "tc3", "d3", before_now, nonstd::nullopt, nonstd::nullopt},
-                    {"id4", "tc4", "d4", after_now, nonstd::nullopt, nonstd::nullopt},
-                    {"id5", "tc5", "d5", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt}};
+    Purchases ps = {{"id1", created, "tc1", "d1", before_now, nonstd::nullopt, nonstd::nullopt},
+                    {"id2", created, "tc2", "d2", after_now, nonstd::nullopt, nonstd::nullopt},
+                    {"id3", created, "tc3", "d3", before_now, nonstd::nullopt, nonstd::nullopt},
+                    {"id4", created, "tc4", "d4", after_now, nonstd::nullopt, nonstd::nullopt},
+                    {"id5", created, "tc5", "d5", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt}};
 
     err = pc.user_data().SetPurchases(ps);
     ASSERT_FALSE(err);
@@ -572,6 +573,7 @@ TEST_F(TestPsiCash, GetAuthorizations) {
 
     auto before_now = datetime::DateTime::Now().Sub(datetime::Duration(54321));
     auto after_now = datetime::DateTime::Now().Add(datetime::Duration(54321));
+    auto created = datetime::DateTime(); // doesn't matter
 
     const auto encoded1 = "eyJBdXRob3JpemF0aW9uIjp7IklEIjoiMFYzRXhUdmlBdFNxTGZOd2FpQXlHNHpaRUJJOGpIYnp5bFdNeU5FZ1JEZz0iLCJBY2Nlc3NUeXBlIjoic3BlZWQtYm9vc3QtdGVzdCIsIkV4cGlyZXMiOiIyMDE5LTAxLTE0VDE3OjIyOjIzLjE2ODc2NDEyOVoifSwiU2lnbmluZ0tleUlEIjoiUUNZTzV2clIvZGhjRDZ6M2FMQlVNeWRuZlJyZFNRL1RWYW1IUFhYeTd0TT0iLCJTaWduYXR1cmUiOiJQL2NrenloVUJoSk5RQ24zMnluM1VTdGpLencxU04xNW9MclVhTU9XaW9scXBOTTBzNVFSNURHVEVDT1FzQk13ODdQdTc1TGE1OGtJTHRIcW1BVzhDQT09In0=";
     const auto encoded2 = "eyJBdXRob3JpemF0aW9uIjp7IklEIjoibFRSWnBXK1d3TFJqYkpzOGxBUFVaQS8zWnhmcGdwNDFQY0dkdlI5a0RVST0iLCJBY2Nlc3NUeXBlIjoic3BlZWQtYm9vc3QtdGVzdCIsIkV4cGlyZXMiOiIyMDE5LTAxLTE0VDIxOjQ2OjMwLjcxNzI2NTkyNFoifSwiU2lnbmluZ0tleUlEIjoiUUNZTzV2clIvZGhjRDZ6M2FMQlVNeWRuZlJyZFNRL1RWYW1IUFhYeTd0TT0iLCJTaWduYXR1cmUiOiJtV1Z5Tm9ZU0pFRDNXU3I3bG1OeEtReEZza1M5ZWlXWG1lcDVvVWZBSHkwVmYrSjZaQW9WajZrN3ZVTDNrakIreHZQSTZyaVhQc3FzWENRNkx0eFdBQT09In0=";
@@ -581,9 +583,9 @@ TEST_F(TestPsiCash, GetAuthorizations) {
     ASSERT_TRUE(auth_res1);
     ASSERT_TRUE(auth_res2);
 
-    purchases = {{"future_no_auth", "tc1", "d1", after_now, nonstd::nullopt, nonstd::nullopt},
-                 {"past_auth", "tc2", "d2", before_now, nonstd::nullopt, *auth_res1},
-                 {"future_auth", "tc3", "d3", after_now, nonstd::nullopt, *auth_res2}};
+    purchases = {{"future_no_auth", created, "tc1", "d1", after_now, nonstd::nullopt, nonstd::nullopt},
+                 {"past_auth", created, "tc2", "d2", before_now, nonstd::nullopt, *auth_res1},
+                 {"future_auth", created, "tc3", "d3", after_now, nonstd::nullopt, *auth_res2}};
 
     err = pc.user_data().SetPurchases(purchases);
     ASSERT_FALSE(err);
@@ -612,6 +614,7 @@ TEST_F(TestPsiCash, GetPurchasesByAuthorizationID) {
 
     auto before_now = datetime::DateTime::Now().Sub(datetime::Duration(54321));
     auto after_now = datetime::DateTime::Now().Add(datetime::Duration(54321));
+    auto created = datetime::DateTime(); // doesn't matter
 
     const auto encoded1 = "eyJBdXRob3JpemF0aW9uIjp7IklEIjoiMFYzRXhUdmlBdFNxTGZOd2FpQXlHNHpaRUJJOGpIYnp5bFdNeU5FZ1JEZz0iLCJBY2Nlc3NUeXBlIjoic3BlZWQtYm9vc3QtdGVzdCIsIkV4cGlyZXMiOiIyMDE5LTAxLTE0VDE3OjIyOjIzLjE2ODc2NDEyOVoifSwiU2lnbmluZ0tleUlEIjoiUUNZTzV2clIvZGhjRDZ6M2FMQlVNeWRuZlJyZFNRL1RWYW1IUFhYeTd0TT0iLCJTaWduYXR1cmUiOiJQL2NrenloVUJoSk5RQ24zMnluM1VTdGpLencxU04xNW9MclVhTU9XaW9scXBOTTBzNVFSNURHVEVDT1FzQk13ODdQdTc1TGE1OGtJTHRIcW1BVzhDQT09In0=";
     const auto encoded2 = "eyJBdXRob3JpemF0aW9uIjp7IklEIjoibFRSWnBXK1d3TFJqYkpzOGxBUFVaQS8zWnhmcGdwNDFQY0dkdlI5a0RVST0iLCJBY2Nlc3NUeXBlIjoic3BlZWQtYm9vc3QtdGVzdCIsIkV4cGlyZXMiOiIyMDE5LTAxLTE0VDIxOjQ2OjMwLjcxNzI2NTkyNFoifSwiU2lnbmluZ0tleUlEIjoiUUNZTzV2clIvZGhjRDZ6M2FMQlVNeWRuZlJyZFNRL1RWYW1IUFhYeTd0TT0iLCJTaWduYXR1cmUiOiJtV1Z5Tm9ZU0pFRDNXU3I3bG1OeEtReEZza1M5ZWlXWG1lcDVvVWZBSHkwVmYrSjZaQW9WajZrN3ZVTDNrakIreHZQSTZyaVhQc3FzWENRNkx0eFdBQT09In0=";
@@ -621,9 +624,9 @@ TEST_F(TestPsiCash, GetPurchasesByAuthorizationID) {
     ASSERT_TRUE(auth_res1);
     ASSERT_TRUE(auth_res2);
 
-    purchases = {{"future_no_auth", "tc1", "d1", after_now, nonstd::nullopt, nonstd::nullopt},
-                 {"past_auth", "tc2", "d2", before_now, nonstd::nullopt, *auth_res1},
-                 {"future_auth", "tc3", "d3", after_now, nonstd::nullopt, *auth_res2}};
+    purchases = {{"future_no_auth", created, "tc1", "d1", after_now, nonstd::nullopt, nonstd::nullopt},
+                 {"past_auth", created, "tc2", "d2", before_now, nonstd::nullopt, *auth_res1},
+                 {"future_auth", created, "tc3", "d3", after_now, nonstd::nullopt, *auth_res2}};
 
     err = pc.user_data().SetPurchases(purchases);
     ASSERT_FALSE(err);
@@ -650,11 +653,12 @@ TEST_F(TestPsiCash, NextExpiringPurchase) {
     auto first = datetime::DateTime::Now().Sub(datetime::Duration(333));
     auto second = datetime::DateTime::Now().Sub(datetime::Duration(222));
     auto third = datetime::DateTime::Now().Sub(datetime::Duration(111));
+    auto created = datetime::DateTime(); // doesn't matter
 
-    Purchases ps = {{"id1", "tc1", "d1", second, nonstd::nullopt, nonstd::nullopt},
-                    {"id2", "tc2", "d2", first, nonstd::nullopt, nonstd::nullopt}, // first to expire
-                    {"id3", "tc3", "d3", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt},
-                    {"id4", "tc4", "d4", third, nonstd::nullopt, nonstd::nullopt}};
+    Purchases ps = {{"id1", created, "tc1", "d1", second, nonstd::nullopt, nonstd::nullopt},
+                    {"id2", created, "tc2", "d2", first, nonstd::nullopt, nonstd::nullopt}, // first to expire
+                    {"id3", created, "tc3", "d3", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt},
+                    {"id4", created, "tc4", "d4", third, nonstd::nullopt, nonstd::nullopt}};
 
     err = pc.user_data().SetPurchases(ps);
     ASSERT_FALSE(err);
@@ -668,9 +672,9 @@ TEST_F(TestPsiCash, NextExpiringPurchase) {
     ASSERT_EQ(p->id, ps[1].id);
 
     auto later_than_now = datetime::DateTime::Now().Add(datetime::Duration(54321));
-    ps = {{"id1", "tc1", "d1", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt},
-          {"id2", "tc2", "d2", later_than_now, nonstd::nullopt, nonstd::nullopt}, // only expiring
-          {"id3", "tc3", "d3", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt}};
+    ps = {{"id1", created, "tc1", "d1", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt},
+          {"id2", created, "tc2", "d2", later_than_now, nonstd::nullopt, nonstd::nullopt}, // only expiring
+          {"id3", created, "tc3", "d3", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt}};
 
     err = pc.user_data().SetPurchases(ps);
     ASSERT_FALSE(err);
@@ -684,8 +688,8 @@ TEST_F(TestPsiCash, NextExpiringPurchase) {
     ASSERT_EQ(p->id, ps[1].id);
 
     // None expiring
-    ps = {{"id1", "tc1", "d1", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt},
-          {"id2", "tc2", "d2", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt}};
+    ps = {{"id1", created, "tc1", "d1", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt},
+          {"id2", created, "tc2", "d2", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt}};
 
     err = pc.user_data().SetPurchases(ps);
     ASSERT_FALSE(err);
@@ -712,11 +716,12 @@ TEST_F(TestPsiCash, ExpirePurchases) {
 
     auto before_now = datetime::DateTime::Now().Sub(datetime::Duration(54321));
     auto after_now = datetime::DateTime::Now().Add(datetime::Duration(54321));
+    auto created = datetime::DateTime(); // doesn't matter
 
-    Purchases ps = {{"id1", "tc1", "d1", after_now, nonstd::nullopt, nonstd::nullopt},
-                    {"id2", "tc2", "d2", before_now, nonstd::nullopt, nonstd::nullopt},
-                    {"id3", "tc3", "d3", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt},
-                    {"id4", "tc4", "d4", before_now, nonstd::nullopt, nonstd::nullopt}};
+    Purchases ps = {{"id1", created, "tc1", "d1", after_now, nonstd::nullopt, nonstd::nullopt},
+                    {"id2", created, "tc2", "d2", before_now, nonstd::nullopt, nonstd::nullopt},
+                    {"id3", created, "tc3", "d3", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt},
+                    {"id4", created, "tc4", "d4", before_now, nonstd::nullopt, nonstd::nullopt}};
     Purchases expired = {ps[1], ps[3]};
     Purchases nonexpired = {ps[0], ps[2]};
 
@@ -754,10 +759,12 @@ TEST_F(TestPsiCash, RemovePurchases) {
     auto v = pc.GetPurchases();
     ASSERT_EQ(v.size(), 0);
 
-    Purchases ps = {{"id1", "tc1", "d1", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt},
-                    {"id2", "tc2", "d2", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt},
-                    {"id3", "tc3", "d3", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt},
-                    {"id4", "tc4", "d4", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt}};
+    auto created = datetime::DateTime(); // doesn't matter
+
+    Purchases ps = {{"id1", created, "tc1", "d1", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt},
+                    {"id2", created, "tc2", "d2", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt},
+                    {"id3", created, "tc3", "d3", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt},
+                    {"id4", created, "tc4", "d4", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt}};
     vector<TransactionID> remove_ids = {ps[1].id, ps[3].id};
     Purchases remaining = {ps[0], ps[2]};
 
@@ -1063,7 +1070,7 @@ TEST_F(TestPsiCash, GetDiagnosticInfo) {
         pc.user_data().SetBalance(12345);
         pc.user_data().SetPurchasePrices({{"tc1", "d1", 123}, {"tc2", "d2", 321}});
         pc.user_data().SetPurchases(
-                {{"id2", "tc2", "d2", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt}});
+                {{"id2", datetime::DateTime(), "tc2", "d2", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt}});
         pc.user_data().SetAuthTokens({{"a", "a"}, {"b", "b"}, {"c", "c"}}, "tokens-timestamp", true);
         // pc.user_data().SetServerTimeDiff() // too hard to do reliably
         want = R"|({
@@ -1562,6 +1569,7 @@ TEST_F(TestPsiCash, NewExpiringPurchase) {
     auto local_now = datetime::DateTime::Now();
     ASSERT_NEAR(purchase_result->purchase->local_time_expiry->MillisSinceEpoch(), local_now.MillisSinceEpoch(), 5000);
     ASSERT_NEAR(purchase_result->purchase->server_time_expiry->MillisSinceEpoch(), local_now.MillisSinceEpoch(), 5000) << "Try resyncing your local clock";
+    ASSERT_NEAR(purchase_result->purchase->server_time_created.MillisSinceEpoch(), local_now.MillisSinceEpoch(), 5000) << "Try resyncing your local clock";
     // Check UserData -- purchase should still be valid
     ASSERT_EQ(pc.user_data().GetLastTransactionID(), purchase_result->purchase->id);
     auto purchases = pc.GetPurchases();

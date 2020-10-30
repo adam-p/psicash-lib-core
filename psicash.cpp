@@ -868,7 +868,7 @@ Result<PsiCash::NewExpiringPurchaseResponse> PsiCash::NewExpiringPurchase(
     }
 
     string transaction_id, authorization_encoded, transaction_type;
-    datetime::DateTime server_expiry;
+    datetime::DateTime server_expiry, server_created;
 
     // Set our new data in a single write.
     // Note that any early return will cause updates to roll back.
@@ -890,29 +890,29 @@ Result<PsiCash::NewExpiringPurchaseResponse> PsiCash::NewExpiringPurchase(
 
             // Many response fields are optional (depending on the presence of the indicator token)
 
-            if (j["Balance"].is_number_integer()) {
+            if (j.at("Balance").is_number_integer()) {
                 // We don't care about the return value of this right now
-                (void)user_data_->SetBalance(j["Balance"].get<int64_t>());
+                (void)user_data_->SetBalance(j.at("Balance").get<int64_t>());
             }
 
-            if (j["TransactionID"].is_string()) {
-                transaction_id = j["TransactionID"].get<string>();
+            transaction_id = j.at("TransactionID").get<string>();
+
+            if (!server_created.FromISO8601(j.at("Created").get<string>())) {
+                return MakeCriticalError("failed to parse Created; got "s + j.at("Created").get<string>());
             }
 
-            if (j["Authorization"].is_string()) {
-                authorization_encoded = j["Authorization"].get<string>();
+            if (j.at("Authorization").is_string()) {
+                authorization_encoded = j.at("Authorization").get<string>();
             }
 
-            if (j["TransactionResponse"]["Type"].is_string()) {
-                transaction_type = j["TransactionResponse"]["Type"].get<string>();
+            if (j.at("/TransactionResponse/Type"_json_pointer).is_string()) {
+                transaction_type = j.at("/TransactionResponse/Type"_json_pointer).get<string>();
             }
 
-            if (j["TransactionResponse"]["Values"]["Expires"].is_string()) {
-                string expiry_string = j["TransactionResponse"]["Values"]["Expires"].get<string>();
+            if (j.at("/TransactionResponse/Values/Expires"_json_pointer).is_string()) {
+                string expiry_string = j.at("/TransactionResponse/Values/Expires"_json_pointer).get<string>();
                 if (!server_expiry.FromISO8601(expiry_string)) {
-                    return MakeCriticalError(
-                            "failed to parse TransactionResponse.Values.Expires; got "s +
-                            expiry_string);
+                    return MakeCriticalError("failed to parse TransactionResponse.Values.Expires; got "s + expiry_string);
                 }
             }
 
@@ -953,14 +953,15 @@ Result<PsiCash::NewExpiringPurchaseResponse> PsiCash::NewExpiringPurchase(
         }
 
         Purchase purchase = {
-                transaction_id,
-                transaction_class,
-                distinguisher,
-                server_expiry.IsZero() ? nullopt : make_optional(
-                        server_expiry),
-                server_expiry.IsZero() ? nullopt : make_optional(
-                        server_expiry),
-                authOptional
+            transaction_id,
+            server_created,
+            transaction_class,
+            distinguisher,
+            server_expiry.IsZero() ? nullopt : make_optional(
+                    server_expiry),
+            server_expiry.IsZero() ? nullopt : make_optional(
+                    server_expiry),
+            authOptional
         };
 
         user_data_->UpdatePurchaseLocalTimeExpiry(purchase);
@@ -1255,11 +1256,15 @@ void from_json(const json& j, Purchase& p) {
 /// Builds a purchase from server response JSON.
 error::Result<psicash::Purchase> PsiCash::PurchaseFromJSON(const json& j) const {
     string transaction_id, transaction_class, transaction_distinguisher, authorization_encoded, transaction_type;
-    datetime::DateTime server_expiry;
+    datetime::DateTime server_expiry, server_created;
     try {
         transaction_id = j.at("TransactionID").get<string>();
         transaction_class = j.at("Class").get<string>();
         transaction_distinguisher = j.at("Distinguisher").get<string>();
+
+        if (!server_created.FromISO8601(j.at("Created").get<string>())) {
+            return MakeCriticalError("failed to parse Created; got "s + j.at("Created").get<string>());
+        }
 
         if (j.at("Authorization").is_string()) {
             authorization_encoded = j["Authorization"].get<string>();
@@ -1268,9 +1273,7 @@ error::Result<psicash::Purchase> PsiCash::PurchaseFromJSON(const json& j) const 
         if (j.at("/TransactionResponse/Values/Expires"_json_pointer).is_string()) {
             auto expiry_string = j["/TransactionResponse/Values/Expires"_json_pointer].get<string>();
             if (!server_expiry.FromISO8601(expiry_string)) {
-                return MakeCriticalError(
-                        "failed to parse TransactionResponse.Values.Expires; got "s +
-                        expiry_string);
+                return MakeCriticalError("failed to parse TransactionResponse.Values.Expires; got "s + expiry_string);
             }
         }
 
@@ -1294,14 +1297,15 @@ error::Result<psicash::Purchase> PsiCash::PurchaseFromJSON(const json& j) const 
     }
 
     Purchase purchase = {
-            transaction_id,
-            transaction_class,
-            transaction_distinguisher,
-            server_expiry.IsZero() ? nullopt : make_optional(
-                    server_expiry),
-            server_expiry.IsZero() ? nullopt : make_optional(
-                    server_expiry),
-            authOptional
+        transaction_id,
+        server_created,
+        transaction_class,
+        transaction_distinguisher,
+        server_expiry.IsZero() ? nullopt : make_optional(
+                server_expiry),
+        server_expiry.IsZero() ? nullopt : make_optional(
+                server_expiry),
+        authOptional
     };
 
     user_data_->UpdatePurchaseLocalTimeExpiry(purchase);

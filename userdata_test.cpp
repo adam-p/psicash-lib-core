@@ -69,7 +69,7 @@ TEST_F(TestUserData, InitBadVersion)
     auto dsDir = GetTempDir();
 
     // Write a datastore file with a bad (too future) version: 999999.
-    auto ok = TempDir::Write(dsDir, dev, R"({"IsAccount":false,"authTokens":{"earner":"earnertoken","indicator":"indicatortoken","spender":"spendertoken"},"balance":125000000000,"lastTransactionID":"boosttransid","purchasePrices":[{"class":"speed-boost","distinguisher":"1hr","price":100000000000},{"class":"speed-boost","distinguisher":"2hr","price":200000000000},{"class":"speed-boost","distinguisher":"3hr","price":300000000000},{"class":"speed-boost","distinguisher":"4hr","price":400000000000},{"class":"speed-boost","distinguisher":"5hr","price":500000000000},{"class":"speed-boost","distinguisher":"6hr","price":600000000000},{"class":"speed-boost","distinguisher":"7hr","price":700000000000},{"class":"speed-boost","distinguisher":"8hr","price":800000000000},{"class":"speed-boost","distinguisher":"9hr","price":900000000000},{"class":"speed-boost","distinguisher":"24hr","price":800000000000}],"purchases":[{"authorization":{"AccessType":"speed-boost-test","Encoded":"boostauth","Expires":"2020-07-27T15:14:30.986Z","ID":"boostauthid"},"class":"speed-boost","distinguisher":"1hr","id":"boosttransid","localTimeExpiry":"2020-07-27T15:14:32.878Z","serverTimeExpiry":"2020-07-27T15:14:30.986Z"}],"requestMetadata":{"client_region":"CA","client_version":"999","propagation_channel_id":"ABCD1234","sponsor_id":"ABCD1234"},"serverTimeDiff":-2584,"v":999999})");
+    auto ok = TempDir::Write(dsDir, dev, R"({"IsAccount":false,"authTokens":{"earner":"earnertoken","indicator":"indicatortoken","spender":"spendertoken"},"balance":125000000000,"lastTransactionID":"boosttransid","purchasePrices":[{"class":"speed-boost","distinguisher":"1hr","price":100000000000},{"class":"speed-boost","distinguisher":"2hr","price":200000000000},{"class":"speed-boost","distinguisher":"3hr","price":300000000000},{"class":"speed-boost","distinguisher":"4hr","price":400000000000},{"class":"speed-boost","distinguisher":"5hr","price":500000000000},{"class":"speed-boost","distinguisher":"6hr","price":600000000000},{"class":"speed-boost","distinguisher":"7hr","price":700000000000},{"class":"speed-boost","distinguisher":"8hr","price":800000000000},{"class":"speed-boost","distinguisher":"9hr","price":900000000000},{"class":"speed-boost","distinguisher":"24hr","price":800000000000}],"purchases":[{"authorization":{"AccessType":"speed-boost-test","Encoded":"boostauth","Expires":"2020-07-27T15:14:30.986Z","ID":"boostauthid"},"class":"speed-boost","distinguisher":"1hr","id":"boosttransid","localTimeExpiry":"2020-07-27T15:14:32.878Z","serverTimeExpiry":"2020-07-27T15:14:30.986Z","serverTimeCreated":"2020-07-27T15:14:30.986Z"}],"requestMetadata":{"client_region":"CA","client_version":"999","propagation_channel_id":"ABCD1234","sponsor_id":"ABCD1234"},"serverTimeDiff":-2584,"v":999999})");
     ASSERT_TRUE(ok) << errno;
 
     // Now load the file and upgrade
@@ -88,8 +88,8 @@ TEST_F(TestUserData, Persistence)
     int64_t want_balance = 12345;
     PurchasePrices want_purchase_prices = {{"tc1", "d1", 123}, {"tc2", "d2", 321}};
     Purchases want_purchases = {
-        {"id1", "tc1", "d1", nullopt, nullopt, nullopt},
-        {"id2", "tc2", "d2", nullopt, nullopt, nullopt}};
+        {"id1", datetime::DateTime(), "tc1", "d1", nullopt, nullopt, nullopt},
+        {"id2", datetime::DateTime(), "tc2", "d2", nullopt, nullopt, nullopt}};
     string req_metadata_key = "req_metadata_key";
     string want_req_metadata_value = "want_req_metadata_value";
 
@@ -229,6 +229,7 @@ TEST_F(TestUserData, UpdatePurchaseLocalTimeExpiry)
 
     Purchase purchase_noexpiry{
         .id = "id",
+        .server_time_created = datetime::DateTime(),
         .transaction_class = "tc",
         .distinguisher = "d"
     };
@@ -236,6 +237,7 @@ TEST_F(TestUserData, UpdatePurchaseLocalTimeExpiry)
     ASSERT_TRUE(server_expiry.FromISO8601("2031-02-03T04:05:06.789Z"));
     Purchase purchase_expiry{
         .id = "id",
+        .server_time_created = datetime::DateTime(),
         .transaction_class = "tc",
         .distinguisher = "d",
         .server_time_expiry = server_expiry
@@ -398,12 +400,14 @@ TEST_F(TestUserData, Purchases)
     // Set then get
     auto dt1 = datetime::DateTime::Now().Add(datetime::Duration(1));
     auto dt2 = datetime::DateTime::Now().Add(datetime::Duration(2));
+    auto created1 = datetime::DateTime::Now().Sub(datetime::Duration(3));
+    auto created2 = datetime::DateTime::Now().Sub(datetime::Duration(4));
     auto auth_res1 = psicash::DecodeAuthorization("eyJBdXRob3JpemF0aW9uIjp7IklEIjoibFRSWnBXK1d3TFJqYkpzOGxBUFVaQS8zWnhmcGdwNDFQY0dkdlI5a0RVST0iLCJBY2Nlc3NUeXBlIjoic3BlZWQtYm9vc3QtdGVzdCIsIkV4cGlyZXMiOiIyMDE5LTAxLTE0VDIxOjQ2OjMwLjcxNzI2NTkyNFoifSwiU2lnbmluZ0tleUlEIjoiUUNZTzV2clIvZGhjRDZ6M2FMQlVNeWRuZlJyZFNRL1RWYW1IUFhYeTd0TT0iLCJTaWduYXR1cmUiOiJtV1Z5Tm9ZU0pFRDNXU3I3bG1OeEtReEZza1M5ZWlXWG1lcDVvVWZBSHkwVmYrSjZaQW9WajZrN3ZVTDNrakIreHZQSTZyaVhQc3FzWENRNkx0eFdBQT09In0=");
     ASSERT_TRUE(auth_res1);
 
     Purchases want = {
-        {"id1", "tc1", "d1", dt1, dt2, *auth_res1},
-        {"id2", "tc2", "d2", nullopt, nullopt, nullopt}};
+        {"id1", created1, "tc1", "d1", dt1, dt2, *auth_res1},
+        {"id2", created2, "tc2", "d2", nullopt, nullopt, nullopt}};
 
     err = ud.SetPurchases(want);
     ASSERT_FALSE(err);
@@ -417,7 +421,7 @@ TEST_F(TestUserData, Purchases)
     err = ud.SetServerTimeDiff(server_now);
     ASSERT_FALSE(err);
     // Supply server time but not local time
-    want.push_back({"id3", "tc3", "d3", server_now, nullopt, nullopt});
+    want.push_back({"id3", created1, "tc3", "d3", server_now, nullopt, nullopt});
     err = ud.SetPurchases(want);
     got = ud.GetPurchases();
     ASSERT_EQ(got.size(), 3);
@@ -435,29 +439,45 @@ TEST_F(TestUserData, AddPurchase)
     auto v = ud.GetPurchases();
     ASSERT_EQ(v.size(), 0);
 
-    // Set then get
-    Purchases want = {
-        {"id1", "tc1", "d1", nullopt, nullopt, nullopt},
-        {"id2", "tc2", "d2", nullopt, nullopt, nullopt}};
+    // We need to check the behaviour for duplicates and out-of-chrono-order addition
 
+    Purchases final_want = {
+        {"id0", datetime::DateTime::Now().Sub(datetime::Duration(6)), "tc0", "d0", nullopt, nullopt, nullopt},
+        {"id1", datetime::DateTime::Now().Sub(datetime::Duration(5)), "tc1", "d1", nullopt, nullopt, nullopt},
+        {"id2", datetime::DateTime::Now().Sub(datetime::Duration(4)), "tc2", "d2", nullopt, nullopt, nullopt},
+        {"id3", datetime::DateTime::Now().Sub(datetime::Duration(3)), "tc3", "d3", nullopt, nullopt, nullopt}};
+
+    // Start with a subset
+    Purchases want = {final_want[0], final_want[2]};
     err = ud.SetPurchases(want);
     ASSERT_FALSE(err);
     auto got = ud.GetPurchases();
     ASSERT_EQ(got, want);
+    ASSERT_EQ(ud.GetLastTransactionID(), "id2");
 
-    Purchase add = {"id3", "tc3", "d3", nullopt, nullopt, nullopt};
-    err = ud.AddPurchase(add);
+    // Add a later purchase
+    want = {final_want[0], final_want[2], final_want[3]};
+    err = ud.AddPurchase(final_want[3]);
     ASSERT_FALSE(err);
     got = ud.GetPurchases();
-    want.push_back(add);
     ASSERT_EQ(got, want);
     ASSERT_EQ(ud.GetLastTransactionID(), "id3");
 
-    // Try to add the same purchase again
-    err = ud.AddPurchase(add);
+    // Add a purchase in the middle
+    want = {final_want[0], final_want[1], final_want[2], final_want[3]};
+    err = ud.AddPurchase(final_want[1]);
     ASSERT_FALSE(err);
     got = ud.GetPurchases();
     ASSERT_EQ(got, want);
+    ASSERT_EQ(ud.GetLastTransactionID(), "id3");
+
+    // Add a duplicate purchase
+    want = {final_want[0], final_want[1], final_want[2], final_want[3]};
+    err = ud.AddPurchase(final_want[2]);
+    ASSERT_FALSE(err);
+    got = ud.GetPurchases();
+    ASSERT_EQ(got, want);
+    ASSERT_EQ(ud.GetLastTransactionID(), "id3");
 }
 
 TEST_F(TestUserData, LastTransactionID)

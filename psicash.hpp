@@ -124,12 +124,12 @@ extern const char* const kTransactionIDZero; // The "zero value" for a Transacti
 
 struct Purchase {
     TransactionID id;
+    datetime::DateTime server_time_created;
     std::string transaction_class;
     std::string distinguisher;
     nonstd::optional<datetime::DateTime> server_time_expiry;
     nonstd::optional<datetime::DateTime> local_time_expiry;
     nonstd::optional<Authorization> authorization;
-    datetime::DateTime server_time_created;
 
     friend bool operator==(const Purchase& lhs, const Purchase& rhs);
     friend void to_json(nlohmann::json& j, const Purchase& p);
