@@ -24,6 +24,7 @@
 #include <vector>
 #include <map>
 #include "psicash.hpp"
+#include "error.hpp"
 
 namespace testing {
 
@@ -62,6 +63,8 @@ class PsiCashTester : public psicash::PsiCash {
     bool MutatorsEnabled();
 
     void SetRequestMutators(const std::vector<std::string>& mutators);
+
+    psicash::error::Result<psicash::Purchase> PurchaseFromJSON(const nlohmann::json& j, const std::string& expected_type="") const;
 };
 
 } // namespace testing

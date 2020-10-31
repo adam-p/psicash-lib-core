@@ -133,6 +133,10 @@ void PsiCashTester::SetRequestMutators(const std::vector<std::string>& mutators)
     g_request_mutators.assign(mutators.crbegin(), mutators.crend());
 }
 
+psicash::error::Result<psicash::Purchase> PsiCashTester::PurchaseFromJSON(const nlohmann::json& j, const std::string& expected_type) const {
+    return PsiCash::PurchaseFromJSON(j, expected_type);
+}
+
 } // namespace psicash
 
 #endif // NDEBUG

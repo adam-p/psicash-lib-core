@@ -1746,7 +1746,7 @@ TEST_F(TestPsiCash, NewExpiringPurchasePauserCommitBug) {
     // Make a purchase that's valid long enough for us to have a conflict.
     balance = pc.Balance();
     auto purchase_result = pc.NewExpiringPurchase(TEST_DEBIT_TRANSACTION_CLASS, TEST_ONE_TRILLION_TEN_SECOND_DISTINGUISHER, ONE_TRILLION);
-    ASSERT_TRUE(purchase_result);
+    ASSERT_TRUE(purchase_result) << purchase_result.error();
     ASSERT_EQ(purchase_result->status, Status::Success);
     ASSERT_EQ(pc.Balance(), balance - ONE_TRILLION);
 
@@ -1803,7 +1803,7 @@ TEST_F(TestPsiCash, NewExpiringPurchaseMutators) {
     ASSERT_FALSE(err) << err;
     pc.SetRequestMutators({"Response:code=500"});
     purchase_result = pc.NewExpiringPurchase(TEST_DEBIT_TRANSACTION_CLASS, TEST_ONE_TRILLION_ONE_MICROSECOND_DISTINGUISHER, ONE_TRILLION);
-    ASSERT_TRUE(purchase_result);
+    ASSERT_TRUE(purchase_result) << purchase_result.error();
     ASSERT_EQ(purchase_result->status, Status::Success);
 
     // Success: Two 500 response (sucessful retry)
@@ -2223,4 +2223,79 @@ TEST_F(TestPsiCash, AccountLogout) {
         ASSERT_FALSE(pc.HasTokens());
         ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
     }
+}
+
+TEST_F(TestPsiCash, PurchaseFromJSON) {
+    PsiCashTester pc;
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+    ASSERT_FALSE(err);
+
+    // Basically no diff
+    ASSERT_FALSE(pc.user_data().SetServerTimeDiff(datetime::DateTime::Now()));
+
+    auto j = R"|({
+        "TransactionID": "txid",
+        "Created": "2001-01-01T01:01:01.001Z",
+        "Class": "txclass",
+        "Distinguisher": "txdistinguisher",
+        "Authorization": "eyJBdXRob3JpemF0aW9uIjp7IklEIjoiMFYzRXhUdmlBdFNxTGZOd2FpQXlHNHpaRUJJOGpIYnp5bFdNeU5FZ1JEZz0iLCJBY2Nlc3NUeXBlIjoic3BlZWQtYm9vc3QtdGVzdCIsIkV4cGlyZXMiOiIyMDE5LTAxLTE0VDE3OjIyOjIzLjE2ODc2NDEyOVoifSwiU2lnbmluZ0tleUlEIjoiUUNZTzV2clIvZGhjRDZ6M2FMQlVNeWRuZlJyZFNRL1RWYW1IUFhYeTd0TT0iLCJTaWduYXR1cmUiOiJQL2NrenloVUJoSk5RQ24zMnluM1VTdGpLencxU04xNW9MclVhTU9XaW9scXBOTTBzNVFSNURHVEVDT1FzQk13ODdQdTc1TGE1OGtJTHRIcW1BVzhDQT09In0=",
+        "TransactionResponse": {
+            "Type": "expected_type",
+            "Values": {
+                "Expires": "2001-01-01T02:01:01.001Z"
+            }
+        }
+    })|"_json;
+
+    // Simple success
+    auto res = pc.PurchaseFromJSON(j);
+    ASSERT_TRUE(res);
+    ASSERT_EQ(res->id, "txid");
+    ASSERT_EQ(res->transaction_class, "txclass");
+    ASSERT_EQ(res->distinguisher, "txdistinguisher");
+    ASSERT_TRUE(res->authorization);
+    datetime::DateTime dt;
+    ASSERT_TRUE(dt.FromISO8601("2001-01-01T01:01:01.001Z"));
+    ASSERT_EQ(dt, res->server_time_created);
+    ASSERT_TRUE(dt.FromISO8601("2001-01-01T02:01:01.001Z"));
+    ASSERT_EQ(dt, *res->server_time_expiry);
+    ASSERT_NEAR(res->local_time_expiry->MillisSinceEpoch(), dt.MillisSinceEpoch(), 500);
+
+    // Expected type mismatch
+    res = pc.PurchaseFromJSON(j, "won't match");
+    ASSERT_FALSE(res);
+
+    // Bad created date
+    auto prev_val = j["Created"];
+    j["Created"] = "nope";
+    res = pc.PurchaseFromJSON(j);
+    ASSERT_FALSE(res);
+    j["Created"] = prev_val; // put it back for following tests
+
+    // Bad expiry date
+    prev_val = j["/TransactionResponse/Values/Expires"_json_pointer];
+    j["/TransactionResponse/Values/Expires"_json_pointer] = "nope";
+    res = pc.PurchaseFromJSON(j);
+    ASSERT_FALSE(res);
+    j["/TransactionResponse/Values/Expires"_json_pointer] = prev_val;
+
+    // Authorization decode fail
+    prev_val = j["Authorization"];
+    j["Authorization"] = "nope";
+    res = pc.PurchaseFromJSON(j);
+    ASSERT_FALSE(res);
+    j["Authorization"] = prev_val;
+
+    // Missing expected JSON field
+    prev_val = j["TransactionID"];
+    j["TransactionID"] = nullptr;
+    res = pc.PurchaseFromJSON(j);
+    ASSERT_FALSE(res);
+    j["TransactionID"] = prev_val;
+
+    prev_val = j["TransactionID"];
+    j.erase("TransactionID");
+    res = pc.PurchaseFromJSON(j);
+    ASSERT_FALSE(res);
+    j["TransactionID"] = prev_val;
 }
