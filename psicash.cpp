@@ -907,9 +907,10 @@ Result<PsiCash::NewExpiringPurchaseResponse> PsiCash::NewExpiringPurchase(
                     return WrapError(err, "AddPurchase failed");
                 }
 
-                if (auto err = pauser.Commit()) {
-                    return WrapError(err, "UserData write failed");
-                }
+            }
+
+            if (auto err = pauser.Commit()) {
+                return WrapError(err, "UserData write failed");
             }
         }
         catch (json::exception& e) {
