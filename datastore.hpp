@@ -77,7 +77,7 @@ public:
             // "control reached end of non-void function without returning a value".
             T val;
             SYNCHRONIZE_BLOCK(mutex_) {
-                // No using MUST_BE_INITIALIZED so we don't need it in the header.
+                // Not using MUST_BE_INITIALIZED so we don't need it in the header.
                 if (!initialized_) {
                     return nonstd::make_unexpected(kDatastoreUninitialized);
                 }
