@@ -1270,6 +1270,131 @@ TEST_F(TestPsiCash, RefreshStateAccount) {
     }
 }
 
+TEST_F(TestPsiCash, RefreshStateRetrievePurchases) {
+    PsiCashTester pc;
+    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+    ASSERT_FALSE(err);
+
+    // We'll go through a set of tests twice -- once with a tracker, once with an account
+
+    // Get a tracker
+    auto res_refresh = pc.RefreshState({"speed-boost"});
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(*res_refresh, Status::Success);
+
+    Purchases expected_purchases;
+
+    for (auto i = 0; i < 2; i++) {
+        auto err = MAKE_1T_REWARD(pc, 2);
+        ASSERT_FALSE(err) << err;
+
+        // We have no purchases yet
+        ASSERT_EQ(pc.GetPurchases().size(), 0);
+
+        // Make a couple sufficiently long-lived purchases
+        auto purchase_result = pc.NewExpiringPurchase(TEST_DEBIT_TRANSACTION_CLASS, TEST_ONE_TRILLION_TEN_SECOND_DISTINGUISHER, ONE_TRILLION);
+        ASSERT_TRUE(purchase_result);
+        ASSERT_EQ(purchase_result->status, Status::Success) << static_cast<int>(purchase_result->status);
+        expected_purchases.push_back(*purchase_result->purchase);
+        ASSERT_EQ(pc.GetPurchases(), expected_purchases) << (pc.IsAccount() ? "account: " : "tracker: ") << pc.GetPurchases().size() << " vs " << expected_purchases.size() << ": " << json(pc.GetPurchases()) << " vs " << json(expected_purchases);
+        ASSERT_EQ(pc.user_data().GetLastTransactionID(), purchase_result->purchase->id);
+
+        purchase_result = pc.NewExpiringPurchase(TEST_DEBIT_TRANSACTION_CLASS, TEST_ONE_TRILLION_ONE_MINUTE_DISTINGUISHER, ONE_TRILLION); // if this lifetime is too long for other tests, we should create an 11-second distinguisher to use (kind of thing)
+        ASSERT_TRUE(purchase_result);
+        ASSERT_EQ(purchase_result->status, Status::Success) << static_cast<int>(purchase_result->status);
+        expected_purchases.push_back(*purchase_result->purchase);
+        ASSERT_EQ(pc.GetPurchases(), expected_purchases);
+        ASSERT_EQ(pc.user_data().GetLastTransactionID(), purchase_result->purchase->id);
+
+        // "Lose" our purchases, but not the LastTransactionID, so no retrieval will occur
+        pc.user_data().SetPurchases({});
+        ASSERT_EQ(pc.GetPurchases().size(), 0);
+        ASSERT_EQ(pc.user_data().GetLastTransactionID(), expected_purchases.back().id);
+
+        // Refresh
+        res_refresh = pc.RefreshState({"speed-boost"});
+        ASSERT_TRUE(res_refresh) << res_refresh.error();
+        ASSERT_EQ(*res_refresh, Status::Success);
+
+        // We didn't get the purchases back
+        ASSERT_EQ(pc.GetPurchases().size(), 0);
+
+        // Clear the LastTransactionID value and try again
+        pc.user_data().SetLastTransactionID("");
+        res_refresh = pc.RefreshState({"speed-boost"});
+        ASSERT_TRUE(res_refresh) << res_refresh.error();
+        ASSERT_EQ(*res_refresh, Status::Success);
+
+        // We got our purchases back
+        ASSERT_EQ(pc.GetPurchases(), expected_purchases) << pc.GetPurchases().size() << " vs " << expected_purchases.size() << ": " << json(pc.GetPurchases()) << " vs " << json(expected_purchases);
+        ASSERT_EQ(pc.user_data().GetLastTransactionID(), expected_purchases.back().id);
+
+        // Clear the purchases and set the LastTransactionID to garbage, which will also trigger a full retrieval
+        pc.user_data().SetPurchases({});
+        pc.user_data().SetLastTransactionID("");
+        ASSERT_EQ(pc.GetPurchases().size(), 0);
+        ASSERT_EQ(pc.user_data().GetLastTransactionID(), ""s);
+        res_refresh = pc.RefreshState({"speed-boost"});
+        ASSERT_TRUE(res_refresh) << res_refresh.error();
+        ASSERT_EQ(*res_refresh, Status::Success);
+
+        // We got our purchases back
+        ASSERT_EQ(pc.GetPurchases(), expected_purchases);
+        ASSERT_EQ(pc.user_data().GetLastTransactionID(), expected_purchases.back().id);
+
+        // Lose the second purchase, but not the first
+        pc.user_data().SetPurchases({});
+        pc.user_data().SetLastTransactionID("");
+        pc.user_data().AddPurchase(expected_purchases[0]);
+        ASSERT_EQ(pc.GetPurchases().size(), 1);
+        ASSERT_EQ(pc.user_data().GetLastTransactionID(), expected_purchases[0].id);
+        res_refresh = pc.RefreshState({"speed-boost"});
+        ASSERT_TRUE(res_refresh) << res_refresh.error();
+        ASSERT_EQ(*res_refresh, Status::Success);
+
+        // We got our purchases back
+        ASSERT_EQ(pc.GetPurchases(), expected_purchases);
+        ASSERT_EQ(pc.user_data().GetLastTransactionID(), expected_purchases.back().id);
+
+        if (i == 0) {
+            // Log in to do the tests a second time
+            auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+            ASSERT_TRUE(res_login);
+            ASSERT_EQ(res_login->status, Status::Success);
+            res_refresh = pc.RefreshState({});
+            ASSERT_TRUE(res_refresh);
+            ASSERT_TRUE(pc.IsAccount());
+            // Should have reset everything
+            ASSERT_EQ(pc.GetPurchases().size(), 0);
+            ASSERT_EQ(pc.user_data().GetLastTransactionID(), "");
+            expected_purchases.clear();
+        }
+    }
+
+    //
+    // Account tests
+    //
+
+    ASSERT_GT(expected_purchases.size(), 0);
+    ASSERT_EQ(pc.GetPurchases(), expected_purchases);
+
+    // Logout
+    err = pc.AccountLogout();
+    ASSERT_FALSE(err);
+    ASSERT_TRUE(pc.IsAccount());               // should still be is-account
+    ASSERT_FALSE(pc.HasTokens());
+    ASSERT_EQ(pc.GetPurchases().size(), 0);
+    // Log back in
+    auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::Success);
+    // Retrieve our purchases
+    res_refresh = pc.RefreshState({});
+    ASSERT_TRUE(res_refresh);
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_EQ(pc.GetPurchases(), expected_purchases);
+}
+
 TEST_F(TestPsiCash, RefreshStateMutators) {
     PsiCashTester pc;
     auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);

@@ -118,6 +118,7 @@ public:
     error::Error AddPurchase(const Purchase& v);
 
     TransactionID GetLastTransactionID() const;
+    error::Error SetLastTransactionID(const TransactionID& v);
 
     nlohmann::json GetRequestMetadata() const;
     template<typename T>
@@ -130,8 +131,6 @@ public:
     }
 
 protected:
-    error::Error SetLastTransactionID(const TransactionID& v);
-
     /// Modifies the purchases in the argument.
     void UpdatePurchasesLocalTimeExpiry(Purchases& purchases) const;
 
