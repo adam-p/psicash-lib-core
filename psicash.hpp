@@ -365,9 +365,9 @@ public:
       could not be found. The price list should be updated immediately, but it might also
       indicate an out-of-date app.
 
-    • InvalidTokens: The current auth tokens are invalid. This indicates something is
-      very wrong, such as the tokens belonging to different users. This state requires
-      a full reset.
+    • InvalidTokens: The current auth tokens are invalid. This shouldn't happen with
+      Trackers, but may happen for Accounts when their tokens expire. Calling RefreshState
+      should return the library to a sane state (logged out or reset).
 
     • ServerError: An error occurred on the server. Probably report to the user and try
       again later. Note that the request has already been retried internally and any
