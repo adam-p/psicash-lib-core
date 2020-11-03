@@ -138,6 +138,7 @@ Error PsiCash::ResetUser() {
 }
 
 Error PsiCash::MigrateTokens(const map<string, string>& tokens, bool is_account) {
+    MUST_BE_INITIALIZED;
     UserData::WritePauser pauser(*user_data_);
     // Ignoring return values while writing is paused.
     // Blow away any user state, as the newly migrated tokens are overwriting it.
@@ -154,6 +155,7 @@ void PsiCash::SetHTTPRequestFn(MakeHTTPRequestFn make_http_request_fn) {
 }
 
 Error PsiCash::SetRequestMetadataItem(const string& key, const string& value) {
+    MUST_BE_INITIALIZED;
     return PassError(user_data_->SetRequestMetadataItem(key, value));
 }
 
@@ -162,6 +164,8 @@ Error PsiCash::SetRequestMetadataItem(const string& key, const string& value) {
 //
 
 bool PsiCash::HasTokens() const {
+    MUST_BE_INITIALIZED;
+
     // Trackers and Accounts both require the same token types (for now).
     // (Accounts will also havethe "logout" type, but it isn't strictly needed for sane operation.)
     vector<string> required_token_types = {kEarnerTokenType, kSpenderTokenType, kIndicatorTokenType};
@@ -178,7 +182,7 @@ bool PsiCash::HasTokens() const {
 
 /// If the user has no tokens, most actions are disallowed. (This can include being in
 /// the is-logged-out-account state.)
-#define TOKENS_REQUIRED     MUST_BE_INITIALIZED if (!HasTokens()) { return MakeCriticalError("user has insufficient tokens"); }
+#define TOKENS_REQUIRED     if (!HasTokens()) { return MakeCriticalError("user has insufficient tokens"); }
 
 bool PsiCash::IsAccount() const {
     if (user_data_->GetIsLoggedOutAccount()) {
@@ -464,6 +468,8 @@ Result<HTTPResult> PsiCash::MakeHTTPRequestWithRetry(
         const std::vector<std::pair<std::string, std::string>>& query_params,
         const optional<json>& body)
 {
+    MUST_BE_INITIALIZED;
+
     if (!make_http_request_fn_) {
         throw std::runtime_error("make_http_request_fn_ must be set before requests are attempted");
     }
