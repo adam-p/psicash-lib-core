@@ -1105,7 +1105,7 @@ TEST_F(TestPsiCash, GetDiagnosticInfo) {
 TEST_F(TestPsiCash, RefreshState) {
     PsiCashTester pc;
     auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
-    ASSERT_FALSE(err);
+    ASSERT_FALSE(err) << err;
 
     pc.user_data().Clear();
     ASSERT_FALSE(pc.HasTokens());
@@ -1398,7 +1398,7 @@ TEST_F(TestPsiCash, RefreshStateRetrievePurchases) {
 TEST_F(TestPsiCash, RefreshStateMutators) {
     PsiCashTester pc;
     auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
-    ASSERT_FALSE(err);
+    ASSERT_FALSE(err) << err;
 
     if (!pc.MutatorsEnabled()) {
       // Can't proceed with these tests
@@ -1666,7 +1666,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
 TEST_F(TestPsiCash, NewExpiringPurchase) {
     PsiCashTester pc;
     auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
-    ASSERT_FALSE(err);
+    ASSERT_FALSE(err) << err;
 
     // Simple success
     pc.user_data().Clear();
