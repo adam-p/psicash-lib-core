@@ -2205,8 +2205,14 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
 
         expected_balance = starting_balance; // should be no change, as merge will fail
 
-        // Log in, forcing tracker tokens to be invalid
-        pc.SetRequestMutators({"InvalidTokens"});
+        // Log in, forcing tracker tokens to be invalid.
+        // Note that the tokens are not passed via the auth header, so we can't use the `"InvalidTokens"` mutator.
+        auto at = pc.user_data().GetAuthTokens();
+        for (const auto& t : at) {
+            at[t.first] = t.second + "-INVALID";
+        }
+        pc.user_data().SetAuthTokens(at, datetime::DateTime::Now().ToISO8601(), false);
+
         res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
         ASSERT_TRUE(res_login);
         ASSERT_EQ(res_login->status, Status::Success);
