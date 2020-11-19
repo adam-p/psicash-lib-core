@@ -2169,7 +2169,7 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
         expected_balance = starting_balance + pc.Balance();
 
         // Log in, with merge and mutator to force "last tracker merge"
-        pc.SetRequestMutators({"EditBody:response;TrackerMergesRemaining=0"});
+        pc.SetRequestMutators({"EditBody:response,TrackerMergesRemaining=0"});
         res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
         ASSERT_TRUE(res_login);
         ASSERT_EQ(res_login->status, Status::Success);
