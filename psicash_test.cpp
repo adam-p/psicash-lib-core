@@ -2108,6 +2108,13 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
     ASSERT_EQ(res_login->status, Status::Success);
     ASSERT_FALSE(res_login->last_tracker_merge);
 
+    // Post-login RefreshState is required
+    auto res_refresh = pc.RefreshState({});
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(*res_refresh, Status::Success);
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_TRUE(pc.HasTokens());
+
     auto starting_balance = pc.Balance();
 
     // Log out and reset so we can get a tracker
@@ -2117,7 +2124,7 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
     ASSERT_FALSE(err);
 
     // Get a new tracker
-    auto res_refresh = pc.RefreshState({});
+    res_refresh = pc.RefreshState({});
     ASSERT_TRUE(res_refresh) << res_refresh.error();
     ASSERT_EQ(*res_refresh, Status::Success);
     ASSERT_FALSE(pc.IsAccount());
@@ -2132,6 +2139,13 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
     ASSERT_EQ(res_login->status, Status::Success);
     ASSERT_TRUE(res_login->last_tracker_merge);
     ASSERT_FALSE(*res_login->last_tracker_merge); // this tracker has near-infinite merges
+
+    res_refresh = pc.RefreshState({});
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(*res_refresh, Status::Success);
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_TRUE(pc.HasTokens());
+
     ASSERT_EQ(pc.Balance(), expected_balance);
 
     // Force a "last tracker merge"
@@ -2161,6 +2175,13 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
         ASSERT_EQ(res_login->status, Status::Success);
         ASSERT_TRUE(res_login->last_tracker_merge);
         ASSERT_TRUE(*res_login->last_tracker_merge); // forced
+
+        res_refresh = pc.RefreshState({});
+        ASSERT_TRUE(res_refresh) << res_refresh.error();
+        ASSERT_EQ(*res_refresh, Status::Success);
+        ASSERT_TRUE(pc.IsAccount());
+        ASSERT_TRUE(pc.HasTokens());
+
         ASSERT_EQ(pc.Balance(), expected_balance);
     }
 
@@ -2191,6 +2212,13 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
         ASSERT_EQ(res_login->status, Status::Success);
         ASSERT_TRUE(res_login->last_tracker_merge);
         ASSERT_FALSE(*res_login->last_tracker_merge);
+
+        res_refresh = pc.RefreshState({});
+        ASSERT_TRUE(res_refresh) << res_refresh.error();
+        ASSERT_EQ(*res_refresh, Status::Success);
+        ASSERT_TRUE(pc.IsAccount());
+        ASSERT_TRUE(pc.HasTokens());
+
         ASSERT_EQ(pc.Balance(), expected_balance);
     }
 }
