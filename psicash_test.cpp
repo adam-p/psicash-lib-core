@@ -1357,7 +1357,7 @@ TEST_F(TestPsiCash, RefreshStateRetrievePurchases) {
         ASSERT_EQ(pc.user_data().GetLastTransactionID(), expected_purchases.back().id);
 
         if (i == 0) {
-            // Log in to do the tests a second time
+            // Log in to do the tests a second time as an account
             auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
             ASSERT_TRUE(res_login);
             ASSERT_EQ(res_login->status, Status::Success);
