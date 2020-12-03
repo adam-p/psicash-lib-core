@@ -182,10 +182,10 @@ public:
     /// be called when wanting to revert to a Tracker from a previously logged in Account.
     error::Error ResetUser();
 
-    /// Forces the given tokens and account status to be set in the datastore. Must be
-    /// called after Init(). RefreshState() must be called after method (and shouldn't be
-    /// be called before this method, although behaviour will be okay).
-    error::Error MigrateTokens(const std::map<std::string, std::string>& tokens, bool is_account);
+    /// Forces the given Tracker tokens to be set in the datastore. Must be called after
+    /// Init(). RefreshState() must be called after method (and shouldn't be be called
+    /// before this method, although behaviour will be okay).
+    error::Error MigrateTrackerTokens(const std::map<std::string, std::string>& tokens);
 
     /// Can be used for updating the HTTP requester function pointer.
     void SetHTTPRequestFn(MakeHTTPRequestFn make_http_request_fn);
@@ -207,6 +207,9 @@ public:
 
     /// Returns the stored info about whether the user is a Tracker or an Account.
     bool IsAccount() const;
+
+    /// Returns the username of the logged-in account, if in a logged-in-account state.
+    nonstd::optional<std::string> AccountUsername() const;
 
     /// Returns the stored user balance.
     int64_t Balance() const;

@@ -96,13 +96,17 @@ public:
     AuthTokens GetAuthTokens() const;
     /// Value is undefined (but safe) if there are no auth tokens.
     std::string GetAuthTokensTimestamp() const;
-    error::Error SetAuthTokens(const AuthTokens& v, const std::string& timestamp, bool is_account);
+    /// `utf8_username` must be set if `is_account` is true.
+    error::Error SetAuthTokens(const AuthTokens& v, const std::string& timestamp, bool is_account, const std::string& utf8_username);
     /// valid_token_types is of the form {"tokenvalueABCD0123": true, ...}
     error::Error CullAuthTokens(const std::map<std::string, bool>& valid_tokens);
     psicash::TokenTypes ValidTokenTypes() const;
 
     bool GetIsAccount() const;
+    /// Note that setting is-account to true does _not_ populate the account username field.
     error::Error SetIsAccount(bool v);
+
+    std::string GetAccountUsername() const;
 
     int64_t GetBalance() const;
     error::Error SetBalance(int64_t v);

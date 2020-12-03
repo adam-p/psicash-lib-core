@@ -53,6 +53,7 @@ TEST_F(TestUserData, InitUpgrade)
     ASSERT_EQ(auth_tokens["indicator"], "indicatortoken");
     ASSERT_EQ(auth_tokens["spender"], "spendertoken");
     ASSERT_FALSE(ud.GetIsAccount());
+    ASSERT_EQ(ud.GetAccountUsername(), "");
     ASSERT_EQ(ud.GetBalance(), 125000000000L);
     ASSERT_EQ(ud.GetPurchasePrices().size(), 10);
     ASSERT_EQ(ud.GetPurchases().size(), 1);
@@ -85,6 +86,7 @@ TEST_F(TestUserData, Persistence)
     AuthTokens want_auth_tokens = {{"k1", "v1"}, {"k2", "v2"}};
     auto want_auth_tokens_timestamp = "tokens-timestamp"s;
     bool want_is_account = true;
+    string want_account_username = "account-username"s;
     int64_t want_balance = 12345;
     PurchasePrices want_purchase_prices = {{"tc1", "d1", 123}, {"tc2", "d2", 321}};
     Purchases want_purchases = {
@@ -105,7 +107,7 @@ TEST_F(TestUserData, Persistence)
         err = ud.SetServerTimeDiff(shifted_now);
         ASSERT_FALSE(err);
 
-        err = ud.SetAuthTokens(want_auth_tokens, want_auth_tokens_timestamp, want_is_account);
+        err = ud.SetAuthTokens(want_auth_tokens, want_auth_tokens_timestamp, want_is_account, want_account_username);
         ASSERT_FALSE(err);
 
         err = ud.SetBalance(want_balance);
@@ -138,6 +140,9 @@ TEST_F(TestUserData, Persistence)
 
         auto got_is_account = ud.GetIsAccount();
         ASSERT_EQ(got_is_account, want_is_account);
+
+        auto got_account_username = ud.GetAccountUsername();
+        ASSERT_EQ(got_account_username, want_account_username);
 
         auto got_balance = ud.GetBalance();
         ASSERT_EQ(got_balance, want_balance);
@@ -279,7 +284,7 @@ TEST_F(TestUserData, AuthTokens)
 
     // Set then get
     AuthTokens want = {{"k1", "v1"}, {"k2", "v2"}};
-    err = ud.SetAuthTokens(want, "tokens-timestamp", false);
+    err = ud.SetAuthTokens(want, "tokens-timestamp", false, "");
     ASSERT_FALSE(err);
     auto got_tokens = ud.GetAuthTokens();
     ASSERT_EQ(want, got_tokens);
@@ -289,8 +294,9 @@ TEST_F(TestUserData, AuthTokens)
 
     is_account = ud.GetIsAccount();
     ASSERT_EQ(is_account, false);
+    ASSERT_EQ(ud.GetAccountUsername(), "");
 
-    err = ud.SetAuthTokens(want, "tokens-timestamp-new", true);
+    err = ud.SetAuthTokens(want, "tokens-timestamp-new", true, "tokens-username");
     ASSERT_FALSE(err);
     got_tokens = ud.GetAuthTokens();
     ASSERT_EQ(want, got_tokens);
@@ -298,9 +304,10 @@ TEST_F(TestUserData, AuthTokens)
     ASSERT_EQ(tokens_timestamp, "tokens-timestamp-new");
     is_account = ud.GetIsAccount();
     ASSERT_EQ(is_account, true);
+    ASSERT_EQ(ud.GetAccountUsername(), "tokens-username");
 
     // CullAuthTokens
-    err = ud.SetAuthTokens({{"k1","v1"},{"k2","v2"},{"k3","v3"},{"k4","v4"},}, "tokens-timestamp", false);
+    err = ud.SetAuthTokens({{"k1","v1"},{"k2","v2"},{"k3","v3"},{"k4","v4"},}, "tokens-timestamp", false, "");
     ASSERT_FALSE(err);
     std::map<std::string, bool> valid_tokens = {{"v1",true},{"v2",false},{"v3",true}};
     want = {{"k1","v1"},{"k3","v3"}};
@@ -318,7 +325,7 @@ TEST_F(TestUserData, ValidTokenTypes) {
     ASSERT_EQ(ud.ValidTokenTypes().size(), 0);
 
     AuthTokens at = {{"a", "a"}, {"b", "b"}, {"c", "c"}};
-    err = ud.SetAuthTokens(at, "value irrelevant", false);
+    err = ud.SetAuthTokens(at, "value irrelevant", false, "");
     auto vtt = ud.ValidTokenTypes();
     ASSERT_EQ(vtt.size(), 3);
     for (const auto& k : vtt) {
@@ -328,7 +335,7 @@ TEST_F(TestUserData, ValidTokenTypes) {
     ASSERT_EQ(at.size(), 0); // we should have erased all items
 
     AuthTokens empty;
-    err = ud.SetAuthTokens(empty, "value irrelevant", false);
+    err = ud.SetAuthTokens(empty, "value irrelevant", false, "");
     vtt = ud.ValidTokenTypes();
     ASSERT_EQ(vtt.size(), 0);
 }
@@ -348,6 +355,31 @@ TEST_F(TestUserData, IsAccount)
     err = ud.SetIsAccount(want);
     ASSERT_FALSE(err);
     auto got = ud.GetIsAccount();
+    ASSERT_EQ(got, want);
+}
+
+TEST_F(TestUserData, AccountUsername)
+{
+    UserData ud;
+    auto err = ud.Init(GetTempDir().c_str(), dev);
+    ASSERT_FALSE(err);
+
+    // Check default value
+    auto v = ud.GetAccountUsername();
+    ASSERT_EQ(v, "");
+
+    // Set then get
+    string want = "account-username";
+    AuthTokens at = {{"a", "a"}, {"b", "b"}, {"c", "c"}};
+    err = ud.SetAuthTokens(at, "value irrelevant", true, want);
+    auto got = ud.GetAccountUsername();
+    ASSERT_EQ(got, want);
+
+    // With tracker tokens -- so no username
+    want = "";
+    at = {{"a", "a"}, {"b", "b"}, {"c", "c"}};
+    err = ud.SetAuthTokens(at, "value irrelevant", true, want);
+    got = ud.GetAccountUsername();
     ASSERT_EQ(got, want);
 }
 

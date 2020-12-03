@@ -55,6 +55,8 @@ static constexpr const char* BALANCE = "balance";
 static const auto kBalancePtr = kUserPtr / BALANCE;
 static constexpr const char* IS_ACCOUNT = "isAccount";
 static const auto kIsAccountPtr = kUserPtr / IS_ACCOUNT;
+static constexpr const char* ACCOUNT_USERNAME = "accountUsername";
+static const auto kAccountUsernamePtr = kUserPtr / ACCOUNT_USERNAME;
 static constexpr const char* PURCHASE_PRICES = "purchasePrices";
 static const auto kPurchasePricesPtr = kUserPtr / PURCHASE_PRICES;
 static constexpr const char* PURCHASES = "purchases";
@@ -215,12 +217,13 @@ std::string UserData::GetAuthTokensTimestamp() const {
 }
 
 error::Error UserData::SetAuthTokens(const AuthTokens& v, const std::string& timestamp,
-                                     bool is_account) {
+                                     bool is_account, const std::string& utf8_username) {
     WritePauser pauser(*this);
     // Not checking errors while paused, as there's no error that can occur.
     (void)datastore_.Set(kAuthTokensPtr, v);
     (void)datastore_.Set(kAuthTokensTimestampPtr, timestamp);
     (void)datastore_.Set(kIsAccountPtr, is_account);
+    (void)datastore_.Set(kAccountUsernamePtr, utf8_username);
     return PassError(pauser.Commit()); // write
 }
 
@@ -258,6 +261,14 @@ bool UserData::GetIsAccount() const {
 
 error::Error UserData::SetIsAccount(bool v) {
     return PassError(datastore_.Set(kIsAccountPtr, v));
+}
+
+std::string UserData::GetAccountUsername() const {
+    auto v = datastore_.Get<string>(kAccountUsernamePtr);
+    if (!v) {
+        return "";
+    }
+    return *v;
 }
 
 int64_t UserData::GetBalance() const {

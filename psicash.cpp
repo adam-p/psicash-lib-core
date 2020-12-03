@@ -137,13 +137,13 @@ Error PsiCash::ResetUser() {
     return PassError(user_data_->DeleteUserData(/*is_logged_out_account=*/false));
 }
 
-Error PsiCash::MigrateTokens(const map<string, string>& tokens, bool is_account) {
+Error PsiCash::MigrateTrackerTokens(const map<string, string>& tokens) {
     MUST_BE_INITIALIZED;
     UserData::WritePauser pauser(*user_data_);
     // Ignoring return values while writing is paused.
     // Blow away any user state, as the newly migrated tokens are overwriting it.
     (void)ResetUser();
-    (void)user_data_->SetAuthTokens(tokens, datetime::DateTime::Now().ToISO8601(), is_account);
+    (void)user_data_->SetAuthTokens(tokens, datetime::DateTime::Now().ToISO8601(), /*is_account=*/false, /*account_username=*/"");
     if (auto err = pauser.Commit()) {
         return WrapError(err, "user data write failed");
     }
@@ -189,6 +189,13 @@ bool PsiCash::IsAccount() const {
         return true;
     }
     return user_data_->GetIsAccount();
+}
+
+nonstd::optional<std::string> PsiCash::AccountUsername() const {
+    if (user_data_->GetIsLoggedOutAccount() || !user_data_->GetIsAccount()) {
+        return nullopt;
+    }
+    return user_data_->GetAccountUsername();
 }
 
 int64_t PsiCash::Balance() const {
@@ -645,7 +652,7 @@ Result<Status> PsiCash::NewTracker() {
         UserData::WritePauser pauser(*user_data_);
         (void)user_data_->SetIsLoggedOutAccount(false);
         (void)user_data_->SetAuthTokens(auth_tokens, server_timestamp.ToISO8601(),
-                                        /*is_account=*/false);
+                                        /*is_account=*/false, /*account_username=*/"");
         (void)user_data_->SetBalance(0);
         if (auto err = pauser.Commit()) {
             return WrapError(err, "user data write failed");
@@ -1085,7 +1092,7 @@ error::Result<PsiCash::AccountLoginResponse> PsiCash::AccountLogin(
         UserData::WritePauser pauser(*user_data_);
         (void)user_data_->SetIsLoggedOutAccount(false);
         (void)user_data_->SetAuthTokens(auth_tokens, server_timestamp.ToISO8601(),
-                                        /*is_account=*/true);
+                                        /*is_account=*/true, /*utf8_username=*/utf8_username);
         if (auto err = pauser.Commit()) {
             return WrapError(err, "user data write failed");
         }
