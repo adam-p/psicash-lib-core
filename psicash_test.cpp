@@ -138,7 +138,6 @@ class TestPsiCash : public ::testing::Test, public TempDir {
     }
 
     const char* user_agent_;
-
 };
 
 #define MAKE_1T_REWARD(pc, count) (pc.MakeRewardRequests(TEST_CREDIT_TRANSACTION_CLASS, TEST_ONE_TRILLION_ONE_MICROSECOND_DISTINGUISHER, count))
@@ -993,6 +992,58 @@ TEST_F(TestPsiCash, GetBuyPsiURL) {
     ASSERT_EQ(url_out.scheme_host_path_, buy_scheme_host_path);
     auto encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":"kEarnerTokenType","tokens_timestamp":"tokens-timestamp","v":1})")));
     ASSERT_EQ(url_out.fragment_, "!"s + key_part + encoded_data);
+}
+
+TEST_F(TestPsiCash, GetAccountSignupURL) {
+    // The only state that affects the URL is the testing/dev and user agent.
+
+    {
+        // Dev env
+        PsiCashTester pc;
+        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false, /*test=*/true);
+        ASSERT_FALSE(err);
+
+        auto url = pc.GetAccountSignupURL();
+        ASSERT_NE(url.find("dev-"), string::npos);
+        ASSERT_NE(url.find(user_agent_), string::npos);
+    }
+
+    {
+        // Prod env
+        PsiCashTester pc;
+        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false, /*test=*/false);
+        ASSERT_FALSE(err);
+
+        auto url = pc.GetAccountSignupURL();
+        ASSERT_EQ(url.find("dev-"), string::npos);
+        ASSERT_NE(url.find(user_agent_), string::npos);
+    }
+}
+
+TEST_F(TestPsiCash, GetAccountManagementURL) {
+    // The only state that affects the URL is the testing/dev and user agent.
+
+    {
+        // Dev env
+        PsiCashTester pc;
+        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false, /*test=*/true);
+        ASSERT_FALSE(err);
+
+        auto url = pc.GetAccountManagementURL();
+        ASSERT_NE(url.find("dev-"), string::npos);
+        ASSERT_NE(url.find(user_agent_), string::npos);
+    }
+
+    {
+        // Prod env
+        PsiCashTester pc;
+        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false, /*test=*/false);
+        ASSERT_FALSE(err);
+
+        auto url = pc.GetAccountManagementURL();
+        ASSERT_EQ(url.find("dev-"), string::npos);
+        ASSERT_NE(url.find(user_agent_), string::npos);
+    }
 }
 
 TEST_F(TestPsiCash, GetRewardedActivityData) {

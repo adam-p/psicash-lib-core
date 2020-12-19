@@ -387,6 +387,18 @@ Result<string> PsiCash::GetBuyPsiURL() const {
     return ModifyLandingPage("https://buy.psi.cash/");
 }
 
+string PsiCash::GetAccountSignupURL() const {
+    string url = test_ ? "https://dev-my.psi.cash" : "https://my.psi.cash";
+    url += "/signup?utm_source=" + user_agent_;
+    return url;
+}
+
+string PsiCash::GetAccountManagementURL() const {
+    string url = test_ ? "https://dev-my.psi.cash" : "https://my.psi.cash";
+    url += "/?utm_source=" + user_agent_;
+    return url;
+}
+
 Result<string> PsiCash::GetRewardedActivityData() const {
     TOKENS_REQUIRED;
 

@@ -259,6 +259,12 @@ public:
     /// where the user can buy PsiCash for real money.
     error::Result<std::string> GetBuyPsiURL() const;
 
+    /// Returns the URL that should be used for signing up a new account.
+    std::string GetAccountSignupURL() const;
+
+    /// Returns the URL that should be used for managing and existing account.
+    std::string GetAccountManagementURL() const;
+
     /// Creates a data package that should be included with a webhook for a user
     /// action that should be rewarded (such as watching a rewarded video).
     /// NOTE: The resulting string will still need to be encoded for use in a URL.
