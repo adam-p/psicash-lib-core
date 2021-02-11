@@ -26,8 +26,9 @@
 
 using json = nlohmann::json;
 
+namespace psicash {
+
 using namespace std;
-using namespace psicash;
 using namespace error;
 
 static string FilePath(const string& file_root, const string& suffix);
@@ -239,3 +240,5 @@ static Error FileStore(bool paused, const string& file_path, const json& json) {
 
     return nullerr;
 }
+
+} // namespace psicash

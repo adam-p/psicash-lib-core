@@ -680,13 +680,13 @@ Result<Status> PsiCash::NewTracker() {
             result->body, "; ", json(result->headers).dump()));
 }
 
-Result<Status> PsiCash::RefreshState(const std::vector<std::string>& purchase_classes) {
+Result<PsiCash::RefreshStateResponse> PsiCash::RefreshState(const std::vector<std::string>& purchase_classes) {
     return RefreshState(purchase_classes, true);
 }
 
 // RefreshState helper that makes recursive calls (to allow for NewTracker and then
 // RefreshState requests).
-Result<Status> PsiCash::RefreshState(
+Result<PsiCash::RefreshStateResponse> PsiCash::RefreshState(
     const std::vector<std::string>& purchase_classes, bool allow_recursion) {
     /*
      Logic flow overview:
@@ -709,7 +709,7 @@ Result<Status> PsiCash::RefreshState(
         if (IsAccount()) {
             // This is a logged-in or logged-out account. We can't just get a new tracker.
             // The app will have to force a login for the user to do anything.
-            return Status::Success;
+            return PsiCash::RefreshStateResponse{ Status::Success, false };
         }
 
         if (!allow_recursion) {
@@ -726,7 +726,7 @@ Result<Status> PsiCash::RefreshState(
         }
 
         if (*new_tracker_result != Status::Success) {
-            return *new_tracker_result;
+            return PsiCash::RefreshStateResponse{ *new_tracker_result, false };
         }
 
         // Note: NewTracker calls SetAuthTokens and SetBalance.
@@ -761,6 +761,8 @@ Result<Status> PsiCash::RefreshState(
             return MakeCriticalError(
                     utils::Stringer("result has no body; code: ", result->code));
         }
+
+        bool reconnect_required = false;
 
         try {
             // We're going to be setting a bunch of UserData values, so let's wait until we're done
@@ -798,8 +800,10 @@ Result<Status> PsiCash::RefreshState(
                 // representation of PurchasePrice. We won't assume that the representation used by the
                 // server is the same (nor that it won't change independent of our representation).
                 for (const auto& pp : j["PurchasePrices"]) {
+                    auto transaction_class = pp["Class"].get<string>();
+
                     purchase_prices.push_back(PurchasePrice{
-                            pp["Class"].get<string>(),
+                            transaction_class,
                             pp["Distinguisher"].get<string>(),
                             pp["Price"].get<int64_t>()
                     });
@@ -810,17 +814,25 @@ Result<Status> PsiCash::RefreshState(
 
             if (j["Purchases"].is_array()) {
                 for (const auto& p : j["Purchases"]) {
-                    auto purchaseRes = PurchaseFromJSON(p);
-                    if (!purchaseRes) {
-                        return WrapError(purchaseRes.error(), "failed to deserialize purchases");
+                    auto purchase_res = PurchaseFromJSON(p);
+                    if (!purchase_res) {
+                        return WrapError(purchase_res.error(), "failed to deserialize purchases");
                     }
-                    user_data_->AddPurchase(*purchaseRes);
+
+                    // Authorizations are applied to tunnel connections, which requires a reconnect
+                    reconnect_required = reconnect_required || purchase_res->authorization;
+
+                    user_data_->AddPurchase(*purchase_res);
                 }
             }
 
-            // If the account tokens just expired, then we need to go into a logged-out
-            // state.
+            // If the account tokens just expired, then we need to go into a logged-out state.
             if (IsAccount() && !HasTokens()) {
+                // If we're transitioning to a logged out state and there are active
+                // authorizations (applied to the current tunnel), then we need to
+                // reconnect to remove them.
+                reconnect_required = reconnect_required || !GetAuthorizations(true).empty();
+
                 user_data_->DeleteUserData(true);
             }
 
@@ -835,12 +847,12 @@ Result<Status> PsiCash::RefreshState(
 
         if (IsAccount()) {
             // For accounts there's nothing else we can do, regardless of the state of token validity.
-            return Status::Success;
+            return PsiCash::RefreshStateResponse{ Status::Success, reconnect_required };
         }
 
         if (HasTokens()) {
             // We have a good tracker state.
-            return Status::Success;
+            return PsiCash::RefreshStateResponse{ Status::Success, reconnect_required };
         }
 
         // We started out with tracker tokens, but they're all invalid.
@@ -851,14 +863,16 @@ Result<Status> PsiCash::RefreshState(
         }
 
         return RefreshState(purchase_classes, true);
-    } else if (result->code == kHTTPStatusUnauthorized) {
+    }
+    else if (result->code == kHTTPStatusUnauthorized) {
         // This can only happen if the tokens we sent didn't all belong to same user.
         // This really should never happen. We're not checking the return value, as there
         // isn't a sane response to a failure at this point.
         (void)user_data_->Clear();
-        return Status::InvalidTokens;
-    } else if (IsServerError(result->code)) {
-        return Status::ServerError;
+        return PsiCash::RefreshStateResponse{ Status::InvalidTokens, false };
+    }
+    else if (IsServerError(result->code)) {
+        return PsiCash::RefreshStateResponse{ Status::ServerError, false };
     }
 
     return MakeCriticalError(utils::Stringer(
@@ -986,12 +1000,16 @@ Result<PsiCash::NewExpiringPurchaseResponse> PsiCash::NewExpiringPurchase(
     return *response;
 }
 
-error::Error PsiCash::AccountLogout() {
+Result<PsiCash::AccountLogoutResponse> PsiCash::AccountLogout() {
     TOKENS_REQUIRED;
 
     if (!IsAccount()) {
         return MakeNoncriticalError("user is not account");
     }
+
+    // Authorizations are applied to psiphond connections, so the presence of an active
+    // one means we will need to reconnect after logging out.
+    bool reconnect_required = !GetAuthorizations(true).empty();
 
     Error httpErr;
     auto result = MakeHTTPRequestWithRetry(
@@ -1024,7 +1042,7 @@ error::Error PsiCash::AccountLogout() {
     }
     */
 
-    return nullerr;
+    return PsiCash::AccountLogoutResponse{ reconnect_required };
 }
 
 error::Result<PsiCash::AccountLoginResponse> PsiCash::AccountLogin(

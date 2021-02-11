@@ -64,7 +64,7 @@ public:
     /// Init() must have already been called, successfully.
     error::Error Clear();
 
-    /// Used to pause and result datastore file writing.
+    /// Used to pause and resume datastore file writing.
     /// WritePausers can be nested -- inner instances will do nothing.
     class WritePauser {
     public:
@@ -74,7 +74,7 @@ public:
         error::Error Commit() { return Unpause(true); }
         error::Error Rollback() { return Unpause(false); }
     private:
-        error::Error Unpause(bool commit) { if (actually_paused_) { return user_data_.datastore_.UnpauseWrites(commit); } else { return error::nullerr; } actually_paused_ = false; }
+        error::Error Unpause(bool commit) { auto p = actually_paused_; actually_paused_ = false; if (p) { return user_data_.datastore_.UnpauseWrites(commit); } return error::nullerr; }
         bool actually_paused_;
         UserData& user_data_;
     };

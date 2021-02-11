@@ -3,7 +3,7 @@
 
 cmake_minimum_required(VERSION 3.4.1)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 20)
 
 add_definitions(-DTESTING)
 
@@ -15,6 +15,8 @@ list(FILTER TEST_SOURCES INCLUDE REGEX "(.*_test\\.cpp)|(test_.*\\.cpp)$")
 #message("TEST_SOURCES: ${TEST_SOURCES}")
 
 if(MSVC)
+    add_compile_options(/std:c++latest)
+
     # From https://stackoverflow.com/questions/10113017/setting-the-msvc-runtime-in-cmake
     # Default to statically-linked runtime.
     if("${MSVC_RUNTIME}" STREQUAL "")

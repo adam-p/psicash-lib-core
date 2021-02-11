@@ -322,6 +322,13 @@ public:
 
     • status: Request success indicator. See below for possible values.
 
+    • reconnect_required: If true, a reconnect is required due to the effects of this call.
+      There are two main scenarios where this is the case:
+      1. A Speed Boost purchase was retrieved and its authorization needs to be applied to
+         the tunnel.
+      2. Speed Boost is active when account tokens expires, so the authorization needs to
+         be removed from the tunnel.
+
     Possible status codes:
 
     • Success: Call was successful. Tokens may now be available (depending on if
@@ -333,7 +340,12 @@ public:
     • InvalidTokens: Should never happen (indicates something like local storage
       corruption). The local user state will be cleared.
     */
-    error::Result<Status> RefreshState(const std::vector<std::string>& purchase_classes);
+    struct RefreshStateResponse {
+        Status status;
+        bool reconnect_required;
+    };
+    error::Result<RefreshStateResponse> RefreshState(
+      const std::vector<std::string>& purchase_classes);
 
     /**
     Makes a new transaction for an "expiring-purchase" class, such as "speed-boost".
@@ -386,7 +398,6 @@ public:
         Status status;
         nonstd::optional<Purchase> purchase;
     };
-
     error::Result<NewExpiringPurchaseResponse> NewExpiringPurchase(
             const std::string& transaction_class,
             const std::string& distinguisher,
@@ -394,6 +405,12 @@ public:
 
     /**
     Logs out a currently logged-in account.
+
+    Result fields:
+    • error: If set, the request failed utterly and no other params are valid.
+    • reconnect_required: If true, a reconnect is required due to the effects of this call.
+      This typically means that a Speed Boost was active at the time of logout.
+
     An error will be returned in these cases:
     • If the user is not an account
     • If the request to the server fails
@@ -404,7 +421,10 @@ public:
     NOTE: This (usually) does involve a network operation, so wrappers may want to be
     asynchronous.
     */
-    error::Error AccountLogout();
+    struct AccountLogoutResponse {
+        bool reconnect_required;
+    };
+    error::Result<AccountLogoutResponse> AccountLogout();
 
     /**
     Attempts to log the current user into an account. Will attempt to merge any available
@@ -459,7 +479,7 @@ protected:
 
     error::Result<Status> NewTracker();
 
-    error::Result<Status> RefreshState(
+    error::Result<RefreshStateResponse> RefreshState(
       const std::vector<std::string>& purchase_classes, bool allow_recursion);
 
     // If expected_type is empty, no check will be done.

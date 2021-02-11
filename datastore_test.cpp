@@ -522,3 +522,44 @@ TEST_F(TestDatastore, GetFullDS)
     ASSERT_EQ(j->at("k").get<string>(), want);
 }
 
+
+/*
+This was a failed attempt to trigger a datastore corruption error we sometimes see.
+To run, FileStore and FileLoad need to be exported.
+TEST_F(TestDatastore, Errors)
+{
+    Datastore ds;
+
+    auto err = ds.Init(GetTempDir().c_str(), ds_suffix);
+    ASSERT_FALSE(err);
+
+    for (size_t i = 0; i < 1000; i++) {
+        auto j = ds.Get();
+        ASSERT_TRUE(j);
+
+        string want = "v";
+        err = ds.Set("/k"_json_pointer, want);
+        ASSERT_FALSE(err);
+    }
+
+    auto datastore_filename = DatastoreFilepath(GetTempDir(), true);
+
+    auto load_res = FileLoad(datastore_filename);
+    ASSERT_TRUE(load_res);
+
+    auto error = FileStore(false, datastore_filename, json::object());
+    ASSERT_FALSE(error) << error.ToString();
+    load_res = FileLoad(datastore_filename);
+    ASSERT_TRUE(load_res);
+
+    error = FileStore(false, datastore_filename, json());
+    ASSERT_FALSE(error) << error.ToString();
+    load_res = FileLoad(datastore_filename);
+    ASSERT_TRUE(load_res);
+
+    error = FileStore(false, datastore_filename, nullptr);
+    ASSERT_FALSE(error) << error.ToString();
+    load_res = FileLoad(datastore_filename);
+    ASSERT_TRUE(load_res);
+}
+*/

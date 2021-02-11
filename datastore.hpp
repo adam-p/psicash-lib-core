@@ -90,10 +90,10 @@ public:
             }
             return val;
         }
-        catch (json::type_error& e) {
+        catch (json::type_error&) {
             return nonstd::make_unexpected(kTypeMismatch);
         }
-        catch (json::out_of_range& e) {
+        catch (json::out_of_range&) {
             // This should be avoided by the explicit check above. But we'll be safe.
             return nonstd::make_unexpected(kNotFound);
         }
