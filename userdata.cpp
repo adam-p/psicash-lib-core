@@ -49,8 +49,6 @@ static constexpr const char* SERVER_TIME_DIFF = "serverTimeDiff";
 static const auto kServerTimeDiffPtr = kUserPtr / SERVER_TIME_DIFF;
 static constexpr const char* AUTH_TOKENS = "authTokens";
 static const auto kAuthTokensPtr = kUserPtr / AUTH_TOKENS;
-static constexpr const char* AUTH_TOKENS_TIMESTAMP = "authTokensTimestamp";
-static const auto kAuthTokensTimestampPtr = kUserPtr / AUTH_TOKENS_TIMESTAMP;
 static constexpr const char* BALANCE = "balance";
 static const auto kBalancePtr = kUserPtr / BALANCE;
 static constexpr const char* IS_ACCOUNT = "isAccount";
@@ -123,11 +121,6 @@ error::Error UserData::Init(const string& file_store_root, bool dev) {
         json newDS = FreshDatastore();
         oldDS->erase("v");
         newDS[kUserPtr] = *oldDS;
-
-        // The v1 datastore also didn't have AuthTokenTimestamp.
-        // So set that to "now". We'll do so without checking if there are tokens, since
-        // there's no downside.
-        newDS[kAuthTokensTimestampPtr] = datetime::DateTime::Now().ToISO8601();
 
         err = datastore_.Reset(newDS);
         if (err) {
@@ -203,25 +196,10 @@ AuthTokens UserData::GetAuthTokens() const {
     return *v;
 }
 
-std::string UserData::GetAuthTokensTimestamp() const {
-    auto v = datastore_.Get<string>(kAuthTokensTimestampPtr);
-    if (!v) {
-        // This should only happen if there are no tokens.
-        assert(GetAuthTokens().empty());
-        // ...But if it did happen when it shouldn't have, the sanest thing to do is
-        // return the current timestamp.
-        return datetime::DateTime::Now().ToISO8601();
-    }
-
-    return *v;
-}
-
-error::Error UserData::SetAuthTokens(const AuthTokens& v, const std::string& timestamp,
-                                     bool is_account, const std::string& utf8_username) {
+error::Error UserData::SetAuthTokens(const AuthTokens& v, bool is_account, const std::string& utf8_username) {
     WritePauser pauser(*this);
     // Not checking errors while paused, as there's no error that can occur.
     (void)datastore_.Set(kAuthTokensPtr, v);
-    (void)datastore_.Set(kAuthTokensTimestampPtr, timestamp);
     (void)datastore_.Set(kIsAccountPtr, is_account);
     (void)datastore_.Set(kAccountUsernamePtr, utf8_username);
     return PassError(pauser.Commit()); // write

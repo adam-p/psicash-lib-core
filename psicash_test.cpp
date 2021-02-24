@@ -21,8 +21,9 @@ constexpr int64_t MAX_STARTING_BALANCE = 100000000000LL;
 
 class TestPsiCash : public ::testing::Test, public TempDir {
   public:
-    TestPsiCash() : user_agent_("Psiphon-PsiCash-iOS") {
-    }
+    TestPsiCash() { }
+
+    static string UserAgent() { return "Psiphon-PsiCash-iOS"; }
 
     static HTTPResult HTTPRequester(const HTTPParams& params) {
         stringstream curl;
@@ -136,8 +137,6 @@ class TestPsiCash : public ::testing::Test, public TempDir {
             return result;
         };
     }
-
-    const char* user_agent_;
 };
 
 #define MAKE_1T_REWARD(pc, count) (pc.MakeRewardRequests(TEST_CREDIT_TRANSACTION_CLASS, TEST_ONE_TRILLION_ONE_MICROSECOND_DISTINGUISHER, count))
@@ -148,7 +147,7 @@ TEST_F(TestPsiCash, InitSimple) {
         PsiCashTester pc;
         ASSERT_FALSE(pc.Initialized());
         // Force Init to test=false to test that path (you should typically not do this in tests)
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false, false);
+        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false, false);
         ASSERT_FALSE(err);
         ASSERT_TRUE(pc.Initialized());
     }
@@ -157,7 +156,7 @@ TEST_F(TestPsiCash, InitSimple) {
         PsiCashTester pc;
         ASSERT_FALSE(pc.Initialized());
         // Force Init to test=true to test that path (you should typically not do this in tests)
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false, true);
+        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false, true);
         ASSERT_FALSE(err);
         ASSERT_TRUE(pc.Initialized());
     }
@@ -170,7 +169,7 @@ TEST_F(TestPsiCash, InitReset) {
         // Set up some state
         PsiCashTester pc;
         ASSERT_FALSE(pc.Initialized());
-        auto err = pc.Init(user_agent_, temp_dir.c_str(), HTTPRequester, false);
+        auto err = pc.Init(TestPsiCash::UserAgent(), temp_dir.c_str(), HTTPRequester, false);
         ASSERT_FALSE(err);
         ASSERT_TRUE(pc.Initialized());
 
@@ -188,7 +187,7 @@ TEST_F(TestPsiCash, InitReset) {
         // Check that the state persists
         PsiCashTester pc;
         ASSERT_FALSE(pc.Initialized());
-        auto err = pc.Init(user_agent_, temp_dir.c_str(), HTTPRequester, false);
+        auto err = pc.Init(TestPsiCash::UserAgent(), temp_dir.c_str(), HTTPRequester, false);
         ASSERT_FALSE(err);
         ASSERT_TRUE(pc.Initialized());
 
@@ -202,7 +201,7 @@ TEST_F(TestPsiCash, InitReset) {
         // Init with reset, previous state should be gone
         PsiCashTester pc;
         ASSERT_FALSE(pc.Initialized());
-        auto err = pc.Init(user_agent_, temp_dir.c_str(), HTTPRequester, true);
+        auto err = pc.Init(TestPsiCash::UserAgent(), temp_dir.c_str(), HTTPRequester, true);
         ASSERT_FALSE(err);
         ASSERT_TRUE(pc.Initialized());
 
@@ -218,14 +217,14 @@ TEST_F(TestPsiCash, InitFail) {
         // Datastore directory that will not work
         auto bad_dir = GetTempDir() + "/a/b/c/d/f/g";
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, bad_dir.c_str(), nullptr, false);
+        auto err = pc.Init(TestPsiCash::UserAgent(), bad_dir.c_str(), nullptr, false);
         ASSERT_TRUE(err) << bad_dir;
         ASSERT_FALSE(pc.Initialized());
     }
     {
         // Empty datastore directory
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, "", nullptr, false);
+        auto err = pc.Init(TestPsiCash::UserAgent(), "", nullptr, false);
         ASSERT_TRUE(err);
         ASSERT_FALSE(pc.Initialized());
     }
@@ -253,7 +252,7 @@ TEST_F(TestPsiCash, UninitializedBehaviour) {
         // Failed Init
         auto bad_dir = GetTempDir() + "/a/b/c/d/f/g";
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, bad_dir.c_str(), nullptr, false);
+        auto err = pc.Init(TestPsiCash::UserAgent(), bad_dir.c_str(), nullptr, false);
         ASSERT_TRUE(err) << bad_dir;
 
         ASSERT_FALSE(pc.Initialized());
@@ -269,7 +268,7 @@ TEST_F(TestPsiCash, MigrateTrackerTokens) {
     {
         // Without calling RefreshState first (so no preexisting tokens); tracker.
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
         ASSERT_FALSE(err);
 
         ASSERT_FALSE(pc.HasTokens());
@@ -284,7 +283,7 @@ TEST_F(TestPsiCash, MigrateTrackerTokens) {
     {
         // Call RefreshState first (so preexisting tokens and user data).
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
         ASSERT_FALSE(err);
 
         ASSERT_FALSE(pc.HasTokens());
@@ -312,14 +311,14 @@ TEST_F(TestPsiCash, MigrateTrackerTokens) {
 TEST_F(TestPsiCash, SetHTTPRequestFn) {
     {
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
         ASSERT_FALSE(err);
         pc.SetHTTPRequestFn(HTTPRequester);
     }
 
     {
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
+        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false);
         ASSERT_FALSE(err);
         pc.SetHTTPRequestFn(HTTPRequester);
     }
@@ -327,7 +326,7 @@ TEST_F(TestPsiCash, SetHTTPRequestFn) {
 
 TEST_F(TestPsiCash, SetRequestMetadataItem) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     auto j = pc.user_data().GetRequestMetadata();
@@ -342,7 +341,7 @@ TEST_F(TestPsiCash, SetRequestMetadataItem) {
 
 TEST_F(TestPsiCash, IsAccount) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     // Check the default
@@ -365,19 +364,19 @@ TEST_F(TestPsiCash, IsAccount) {
 TEST_F(TestPsiCash, HasTokens) {
     {
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
+        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false);
         ASSERT_FALSE(err);
 
         ASSERT_FALSE(pc.HasTokens());
 
         AuthTokens at = {{"a", "a"}, {"b", "b"}, {"c", "c"}};
-        err = pc.user_data().SetAuthTokens(at, "value irrelevant", false, "");
+        err = pc.user_data().SetAuthTokens(at, false, "");
         // We have tokens, but not the right ones
         ASSERT_FALSE(pc.HasTokens());
     }
     {
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
         ASSERT_FALSE(err);
         ASSERT_FALSE(pc.HasTokens());
 
@@ -388,7 +387,7 @@ TEST_F(TestPsiCash, HasTokens) {
     }
     {
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
         ASSERT_FALSE(err);
         ASSERT_FALSE(pc.HasTokens());
 
@@ -401,7 +400,7 @@ TEST_F(TestPsiCash, HasTokens) {
 
 TEST_F(TestPsiCash, Balance) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     // Check the default
@@ -423,7 +422,7 @@ TEST_F(TestPsiCash, Balance) {
 
 TEST_F(TestPsiCash, GetPurchasePrices) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     auto v = pc.GetPurchasePrices();
@@ -446,7 +445,7 @@ TEST_F(TestPsiCash, GetPurchasePrices) {
 
 TEST_F(TestPsiCash, GetPurchases) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     auto v = pc.GetPurchases();
@@ -475,7 +474,7 @@ TEST_F(TestPsiCash, GetPurchases) {
 
 TEST_F(TestPsiCash, ActivePurchases) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     auto v = pc.GetPurchases();
@@ -549,7 +548,7 @@ TEST_F(TestPsiCash, DecodeAuthorization) {
 
 TEST_F(TestPsiCash, GetAuthorizations) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     auto purchases = pc.GetPurchases();
@@ -595,7 +594,7 @@ TEST_F(TestPsiCash, GetAuthorizations) {
 
 TEST_F(TestPsiCash, GetPurchasesByAuthorizationID) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     auto purchases = pc.GetPurchases();
@@ -634,7 +633,7 @@ TEST_F(TestPsiCash, GetPurchasesByAuthorizationID) {
 
 TEST_F(TestPsiCash, NextExpiringPurchase) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     auto v = pc.GetPurchases();
@@ -697,7 +696,7 @@ TEST_F(TestPsiCash, NextExpiringPurchase) {
 
 TEST_F(TestPsiCash, ExpirePurchases) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     auto v = pc.GetPurchases();
@@ -746,7 +745,7 @@ TEST_F(TestPsiCash, ExpirePurchases) {
 
 TEST_F(TestPsiCash, RemovePurchases) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     auto v = pc.GetPurchases();
@@ -806,13 +805,42 @@ TEST_F(TestPsiCash, RemovePurchases) {
     ASSERT_EQ(v, remaining);
 }
 
+// Returns empty string on match
+string TokenPayloadsMatch(const string &got_base64, const json& want_incomplete) {
+    auto want = want_incomplete;
+    want["v"] = 1;
+    want["metadata"]["v"] = 1;
+    want["metadata"]["user_agent"] = TestPsiCash::UserAgent();
+
+    // Extract the tokens_timestamp we got, then remove so we can compare the rest
+    auto got = json::parse(base64::B64Decode(got_base64));
+    datetime::DateTime got_tokens_timestamp;
+    if (!got_tokens_timestamp.FromISO8601(got.at("tokens_timestamp").get<string>())) {
+        return "failed to extract timestamp from got_base64";
+    }
+    got.erase("tokens_timestamp");
+
+    if (got != want) {
+        return utils::Stringer("got!=want; got: >>", got, "<<; want: >>", want, "<<");
+    }
+
+    auto now = datetime::DateTime::Now();
+    auto timestamp_diff_ms = now.MillisSinceEpoch() - got_tokens_timestamp.MillisSinceEpoch();
+    if (timestamp_diff_ms > 3000) {
+        return utils::Stringer("timestamps differ too much; now: ", now.MillisSinceEpoch(), "; got: ", got_tokens_timestamp.MillisSinceEpoch(), "; diff: ", timestamp_diff_ms);
+    }
+
+    return "";
+}
+
 TEST_F(TestPsiCash, ModifyLandingPage) {
     PsiCashTester pc;
     // Pass false for test so that we don't get "dev" and "debug" in all the params
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false, false);
     ASSERT_FALSE(err);
 
     const string key_part = "psicash=";
+    const string bang_key_part = "!" + key_part;
     URL url_in, url_out;
 
     //
@@ -825,8 +853,7 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
     ASSERT_EQ(url_out.query_, url_in.query_);
-    auto encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":null,"tokens_timestamp":null,"v":1})")));
-    ASSERT_EQ(url_out.fragment_, "!"s + key_part + encoded_data);
+    ASSERT_THAT(TokenPayloadsMatch(url_out.fragment_.substr(bang_key_part.length()), R"({"tokens":null})"_json), IsEmpty());
 
     //
     // Add tokens
@@ -835,7 +862,7 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     // Some tokens, but no earner token (different code path)
     AuthTokens auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
                               {kIndicatorTokenType, "kIndicatorTokenType"}};
-    err = pc.user_data().SetAuthTokens(auth_tokens, "tokens-timestamp", false, "");
+    err = pc.user_data().SetAuthTokens(auth_tokens, false, "");
     ASSERT_FALSE(err);
     url_in = {"https://asdf.sadf.gf", "", ""};
     res = pc.ModifyLandingPage(url_in.ToString());
@@ -843,14 +870,13 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
     ASSERT_EQ(url_out.query_, url_in.query_);
-    encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":null,"tokens_timestamp":null,"v":1})")));
-    ASSERT_EQ(url_out.fragment_, "!"s + key_part + encoded_data);
+    ASSERT_THAT(TokenPayloadsMatch(url_out.fragment_.substr(bang_key_part.length()), R"({"tokens":null})"_json), IsEmpty());
 
     // All tokens
     auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
                    {kEarnerTokenType, "kEarnerTokenType"},
                    {kIndicatorTokenType, "kIndicatorTokenType"}};
-    err = pc.user_data().SetAuthTokens(auth_tokens, "tokens-timestamp", false, "");
+    err = pc.user_data().SetAuthTokens(auth_tokens, false, "");
     ASSERT_FALSE(err);
     url_in = {"https://asdf.sadf.gf", "", ""};
     res = pc.ModifyLandingPage(url_in.ToString());
@@ -858,14 +884,11 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
     ASSERT_EQ(url_out.query_, url_in.query_);
-    encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":"kEarnerTokenType","tokens_timestamp":"tokens-timestamp","v":1})")));
-    ASSERT_EQ(url_out.fragment_, "!"s + key_part + encoded_data);
+    ASSERT_THAT(TokenPayloadsMatch(url_out.fragment_.substr(bang_key_part.length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
 
     //
     // No metadata set
     //
-
-    encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":"kEarnerTokenType","tokens_timestamp":"tokens-timestamp","v":1})")));
 
     url_in = {"https://asdf.sadf.gf", "", ""};
     res = pc.ModifyLandingPage(url_in.ToString());
@@ -873,8 +896,7 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
     ASSERT_EQ(url_out.query_, url_in.query_);
-    ASSERT_EQ(url_out.fragment_,
-              "!"s + key_part + encoded_data);
+    ASSERT_THAT(TokenPayloadsMatch(url_out.fragment_.substr(bang_key_part.length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
 
     url_in = {"https://asdf.sadf.gf", "gfaf=asdf", ""};
     res = pc.ModifyLandingPage(url_in.ToString());
@@ -882,8 +904,7 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
     ASSERT_EQ(url_out.query_, url_in.query_);
-    ASSERT_EQ(url_out.fragment_,
-              "!"s + key_part + encoded_data);
+    ASSERT_THAT(TokenPayloadsMatch(url_out.fragment_.substr(bang_key_part.length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
 
     url_in = {"https://asdf.sadf.gf/asdfilj/adf", "gfaf=asdf", ""};
     res = pc.ModifyLandingPage(url_in.ToString());
@@ -891,8 +912,7 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
     ASSERT_EQ(url_out.query_, url_in.query_);
-    ASSERT_EQ(url_out.fragment_,
-              "!"s + key_part + encoded_data);
+    ASSERT_THAT(TokenPayloadsMatch(url_out.fragment_.substr(bang_key_part.length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
 
     url_in = {"https://asdf.sadf.gf/asdfilj/adf.html", "gfaf=asdf", ""};
     res = pc.ModifyLandingPage(url_in.ToString());
@@ -900,16 +920,14 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
     ASSERT_EQ(url_out.query_, url_in.query_);
-    ASSERT_EQ(url_out.fragment_,
-              "!"s + key_part + encoded_data);
+    ASSERT_THAT(TokenPayloadsMatch(url_out.fragment_.substr(bang_key_part.length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
 
     url_in = {"https://asdf.sadf.gf/asdfilj/adf.html", "", "regffd"};
     res = pc.ModifyLandingPage(url_in.ToString());
     ASSERT_TRUE(res);
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
-    ASSERT_EQ(url_out.query_,
-              key_part + encoded_data);
+    ASSERT_THAT(TokenPayloadsMatch(url_out.query_.substr(key_part.length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
     ASSERT_EQ(url_out.fragment_, url_in.fragment_);
 
     url_in = {"https://asdf.sadf.gf/asdfilj/adf.html", "adfg=asdf&vfjnk=fadjn", "regffd"};
@@ -917,8 +935,7 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     ASSERT_TRUE(res);
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
-    ASSERT_EQ(url_out.query_,
-              url_in.query_ + "&" + key_part + encoded_data);
+    ASSERT_THAT(TokenPayloadsMatch(url_out.query_.substr((url_in.query_+"&"+key_part).length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
     ASSERT_EQ(url_out.fragment_, url_in.fragment_);
 
     //
@@ -933,8 +950,7 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
     ASSERT_EQ(url_out.query_, url_in.query_);
-    encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"k":"v","user_agent":")", user_agent_, R"(","v":1},"tokens":"kEarnerTokenType","tokens_timestamp":"tokens-timestamp","v":1})")));
-    ASSERT_EQ(url_out.fragment_, "!"s + key_part + encoded_data);
+    ASSERT_THAT(TokenPayloadsMatch(url_out.fragment_.substr(bang_key_part.length()), R"({"metadata":{"k":"v"},"tokens":"kEarnerTokenType"})"_json), IsEmpty());
 
     //
     // Errors
@@ -950,10 +966,10 @@ TEST_F(TestPsiCash, GetBuyPsiURL) {
 
     PsiCashTester pc;
     // Pass false for test so that we don't get "dev" and "debug" in all the params
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false, false);
     ASSERT_FALSE(err);
 
-    const string key_part = "psicash=";
+    const string bang_key_part = "!psicash=";
     URL url_out;
 
     string buy_scheme_host_path = "https://buy.psi.cash/";
@@ -972,7 +988,7 @@ TEST_F(TestPsiCash, GetBuyPsiURL) {
     // Some tokens, but no earner token (different code path)
     AuthTokens auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
                               {kIndicatorTokenType, "kIndicatorTokenType"}};
-    err = pc.user_data().SetAuthTokens(auth_tokens, "tokens-timestamp", false, "");
+    err = pc.user_data().SetAuthTokens(auth_tokens, false, "");
     ASSERT_FALSE(err);
     res = pc.GetBuyPsiURL();
     ASSERT_FALSE(res);
@@ -984,14 +1000,13 @@ TEST_F(TestPsiCash, GetBuyPsiURL) {
     auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
                    {kEarnerTokenType, "kEarnerTokenType"},
                    {kIndicatorTokenType, "kIndicatorTokenType"}};
-    err = pc.user_data().SetAuthTokens(auth_tokens, "tokens-timestamp", false, "");
+    err = pc.user_data().SetAuthTokens(auth_tokens, false, "");
     ASSERT_FALSE(err);
     res = pc.GetBuyPsiURL();
     ASSERT_TRUE(res);
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, buy_scheme_host_path);
-    auto encoded_data = base64::TrimPadding(base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":"kEarnerTokenType","tokens_timestamp":"tokens-timestamp","v":1})")));
-    ASSERT_EQ(url_out.fragment_, "!"s + key_part + encoded_data);
+    ASSERT_THAT(TokenPayloadsMatch(url_out.fragment_.substr(bang_key_part.length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
 }
 
 TEST_F(TestPsiCash, GetAccountSignupURL) {
@@ -1000,23 +1015,23 @@ TEST_F(TestPsiCash, GetAccountSignupURL) {
     {
         // Dev env
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false, /*test=*/true);
+        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false, /*test=*/true);
         ASSERT_FALSE(err);
 
         auto url = pc.GetAccountSignupURL();
         ASSERT_NE(url.find("dev-"), string::npos);
-        ASSERT_NE(url.find(user_agent_), string::npos);
+        ASSERT_NE(url.find(TestPsiCash::UserAgent()), string::npos);
     }
 
     {
         // Prod env
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false, /*test=*/false);
+        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false, /*test=*/false);
         ASSERT_FALSE(err);
 
         auto url = pc.GetAccountSignupURL();
         ASSERT_EQ(url.find("dev-"), string::npos);
-        ASSERT_NE(url.find(user_agent_), string::npos);
+        ASSERT_NE(url.find(TestPsiCash::UserAgent()), string::npos);
     }
 }
 
@@ -1026,29 +1041,29 @@ TEST_F(TestPsiCash, GetAccountManagementURL) {
     {
         // Dev env
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false, /*test=*/true);
+        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false, /*test=*/true);
         ASSERT_FALSE(err);
 
         auto url = pc.GetAccountManagementURL();
         ASSERT_NE(url.find("dev-"), string::npos);
-        ASSERT_NE(url.find(user_agent_), string::npos);
+        ASSERT_NE(url.find(TestPsiCash::UserAgent()), string::npos);
     }
 
     {
         // Prod env
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false, /*test=*/false);
+        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false, /*test=*/false);
         ASSERT_FALSE(err);
 
         auto url = pc.GetAccountManagementURL();
         ASSERT_EQ(url.find("dev-"), string::npos);
-        ASSERT_NE(url.find(user_agent_), string::npos);
+        ASSERT_NE(url.find(TestPsiCash::UserAgent()), string::npos);
     }
 }
 
 TEST_F(TestPsiCash, GetRewardedActivityData) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     // Error with no tokens
@@ -1058,25 +1073,25 @@ TEST_F(TestPsiCash, GetRewardedActivityData) {
     AuthTokens auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
                               {kEarnerTokenType, "kEarnerTokenType"},
                               {kIndicatorTokenType, "kIndicatorTokenType"}};
-    err = pc.user_data().SetAuthTokens(auth_tokens, "tokens-timestamp", false, "");
+    err = pc.user_data().SetAuthTokens(auth_tokens, false, "");
     ASSERT_FALSE(err);
 
     res = pc.GetRewardedActivityData();
     ASSERT_TRUE(res);
-    ASSERT_EQ(*res, base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", user_agent_, R"(","v":1},"tokens":"kEarnerTokenType","v":1})")));
+    ASSERT_EQ(*res, base64::B64Encode(utils::Stringer(R"({"metadata":{"user_agent":")", TestPsiCash::UserAgent(), R"(","v":1},"tokens":"kEarnerTokenType","v":1})")));
 
     err = pc.SetRequestMetadataItem("k", "v");
     ASSERT_FALSE(err);
     res = pc.GetRewardedActivityData();
     ASSERT_TRUE(res);
-    ASSERT_EQ(*res, base64::B64Encode(utils::Stringer(R"({"metadata":{"k":"v","user_agent":")", user_agent_, R"(","v":1},"tokens":"kEarnerTokenType","v":1})")));
+    ASSERT_EQ(*res, base64::B64Encode(utils::Stringer(R"({"metadata":{"k":"v","user_agent":")", TestPsiCash::UserAgent(), R"(","v":1},"tokens":"kEarnerTokenType","v":1})")));
 }
 
 TEST_F(TestPsiCash, GetDiagnosticInfo) {
     {
         // First do a simple test with test=false
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false, false);
+        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false, false);
         ASSERT_FALSE(err);
 
         auto want = R"|({
@@ -1096,7 +1111,7 @@ TEST_F(TestPsiCash, GetDiagnosticInfo) {
     {
         // Then do the full test with test=true
         PsiCashTester pc;
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false, true);
+        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false, true);
         ASSERT_FALSE(err);
 
         auto want = R"|({
@@ -1116,7 +1131,7 @@ TEST_F(TestPsiCash, GetDiagnosticInfo) {
         pc.user_data().SetPurchasePrices({{"tc1", "d1", 123}, {"tc2", "d2", 321}});
         pc.user_data().SetPurchases(
                 {{"id2", datetime::DateTime(), "tc2", "d2", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt}});
-        pc.user_data().SetAuthTokens({{"a", "a"}, {"b", "b"}, {"c", "c"}}, "tokens-timestamp", true, "username");
+        pc.user_data().SetAuthTokens({{"a", "a"}, {"b", "b"}, {"c", "c"}}, true, "username");
         // pc.user_data().SetServerTimeDiff() // too hard to do reliably
         want = R"|({
         "balance":12345,
@@ -1149,14 +1164,11 @@ TEST_F(TestPsiCash, GetDiagnosticInfo) {
 
 TEST_F(TestPsiCash, RefreshState) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err) << err;
 
     pc.user_data().Clear();
     ASSERT_FALSE(pc.HasTokens());
-    auto pre_tokens_timestamp = pc.user_data().GetAuthTokensTimestamp();
-    // Not checking the value, since it's not valid yet.
-    ASSERT_FALSE(pre_tokens_timestamp.empty());
 
     // Basic NewTracker success
     auto res = pc.RefreshState({"speed-boost"});
@@ -1169,14 +1181,8 @@ TEST_F(TestPsiCash, RefreshState) {
     ASSERT_THAT(pc.Balance(), AllOf(Ge(0), Le(MAX_STARTING_BALANCE)));
     ASSERT_GE(pc.GetPurchasePrices().size(), 2);
 
-    ASSERT_NE(pc.user_data().GetAuthTokensTimestamp(), pre_tokens_timestamp);
-    datetime::DateTime tokens_timestamp_dt;
-    ASSERT_TRUE(tokens_timestamp_dt.FromISO8601(pc.user_data().GetAuthTokensTimestamp()));
-    ASSERT_NEAR(tokens_timestamp_dt.MillisSinceEpoch(), datetime::DateTime::Now().MillisSinceEpoch(), 5000) << "Try resyncing your local clock";
-
     // Test with existing tracker
     auto want_tokens = pc.user_data().GetAuthTokens();
-    auto want_tokens_timestamp = pc.user_data().GetAuthTokensTimestamp();
     res = pc.RefreshState({"speed-boost"});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
@@ -1188,7 +1194,6 @@ TEST_F(TestPsiCash, RefreshState) {
     auto speed_boost_purchase_prices = pc.GetPurchasePrices();
     ASSERT_GE(pc.GetPurchasePrices().size(), 2);
     ASSERT_EQ(want_tokens, pc.user_data().GetAuthTokens());
-    ASSERT_EQ(want_tokens_timestamp, pc.user_data().GetAuthTokensTimestamp());
 
     // Multiple purchase classes
     pc.user_data().Clear();
@@ -1244,7 +1249,7 @@ TEST_F(TestPsiCash, RefreshState) {
 
 TEST_F(TestPsiCash, RefreshStateAccount) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err);
 
     // Test bad is-account state. This is a local sanity check failure that will occur
@@ -1339,7 +1344,7 @@ TEST_F(TestPsiCash, RefreshStateAccount) {
     // Test Account token expiry while Authorization active, requiring tunnel reconnect
     if (pc.MutatorsEnabled()) {
         // Force reset to get rid of any other purchases
-        auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, true);
+        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, true);
         ASSERT_FALSE(err);
 
         // Successful login and refresh
@@ -1377,7 +1382,7 @@ TEST_F(TestPsiCash, RefreshStateAccount) {
 
 TEST_F(TestPsiCash, RefreshStateRetrievePurchases) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err);
 
     // We'll go through a set of tests twice -- once with a tracker, once with an account
@@ -1535,7 +1540,7 @@ TEST_F(TestPsiCash, RefreshStateRetrievePurchases) {
 
 TEST_F(TestPsiCash, RefreshStateMutators) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err) << err;
 
     if (!pc.MutatorsEnabled()) {
@@ -1805,7 +1810,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
 
 TEST_F(TestPsiCash, NewExpiringPurchase) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err) << err;
 
     // Simple success
@@ -1995,7 +2000,7 @@ TEST_F(TestPsiCash, NewExpiringPurchasePauserCommitBug) {
     // was made.
 
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err);
     auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
     ASSERT_TRUE(res_login);
@@ -2035,7 +2040,7 @@ TEST_F(TestPsiCash, NewExpiringPurchasePauserCommitBug) {
 
 TEST_F(TestPsiCash, NewExpiringPurchaseMutators) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err);
 
     if (!pc.MutatorsEnabled()) {
@@ -2099,7 +2104,7 @@ TEST_F(TestPsiCash, NewExpiringPurchaseMutators) {
 
 TEST_F(TestPsiCash, HTTPRequestBadResult) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), nullptr, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false);
     ASSERT_FALSE(err);
 
     // This isn't a "bad" result, exactly, but we'll force an error code and message.
@@ -2117,7 +2122,7 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     // The initial internal release doesn't have Logout, so the tests need to be constrained.
 
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err);
 
     // Empty username and password
@@ -2127,8 +2132,6 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_FALSE(pc.IsAccount());
     ASSERT_FALSE(pc.HasTokens());
     ASSERT_FALSE(pc.AccountUsername());
-    // Not checking the value, since it's not valid yet.
-    ASSERT_FALSE(pc.user_data().GetAuthTokensTimestamp().empty());
 
     // Bad username
     auto rand = utils::RandomID(); // ensure we don't match a real user
@@ -2138,7 +2141,6 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_FALSE(pc.IsAccount());
     ASSERT_FALSE(pc.HasTokens());
     ASSERT_FALSE(pc.AccountUsername());
-    ASSERT_FALSE(pc.user_data().GetAuthTokensTimestamp().empty());
 
     // Good username, bad password
     res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, "this is a bad password");
@@ -2147,13 +2149,8 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_FALSE(pc.IsAccount());
     ASSERT_FALSE(pc.HasTokens());
     ASSERT_FALSE(pc.AccountUsername());
-    ASSERT_FALSE(pc.user_data().GetAuthTokensTimestamp().empty());
 
     // Good credentials
-    auto pre_tokens_timestamp = pc.user_data().GetAuthTokensTimestamp();
-    // Sleep long enough to be sure we'll get a different tokens timestamp (with second resolution)
-    this_thread::sleep_for(chrono::milliseconds(2000));
-    ASSERT_FALSE(pre_tokens_timestamp.empty());
     res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
     ASSERT_TRUE(res_login) << res_login.error();
     ASSERT_EQ(res_login->status, Status::Success);
@@ -2165,17 +2162,10 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_EQ(pc.Balance(), 0); // we haven't called RefreshState yet
     auto prev_earner_token = pc.user_data().GetAuthTokens()["earner"];
 
-    auto post_tokens_timestamp = pc.user_data().GetAuthTokensTimestamp();
-    ASSERT_NE(post_tokens_timestamp, pre_tokens_timestamp);
-    datetime::DateTime tokens_timestamp_dt;
-    ASSERT_TRUE(tokens_timestamp_dt.FromISO8601(post_tokens_timestamp));
-    ASSERT_NEAR(tokens_timestamp_dt.MillisSinceEpoch(), datetime::DateTime::Now().MillisSinceEpoch(), 5000) << "Try resyncing your local clock";
-
     auto res_refresh = pc.RefreshState({});
     ASSERT_TRUE(res_refresh);
     ASSERT_EQ(res_refresh->status, Status::Success);
     ASSERT_GT(pc.Balance(), 0); // Our test accounts don't have zero balance
-    ASSERT_EQ(pc.user_data().GetAuthTokensTimestamp(), post_tokens_timestamp); // Shouldn't have changed
 
     // Try to log in again with bad creds
     res_login = pc.AccountLogin(rand, "this is a bad password");
@@ -2200,9 +2190,6 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_THAT(pc.user_data().ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator"), Contains("logout")));
 
     // Log in again with the same account
-    pre_tokens_timestamp = pc.user_data().GetAuthTokensTimestamp();
-    // Sleep long enough to be sure we'll get a different tokens timestamp (with second resolution)
-    this_thread::sleep_for(chrono::milliseconds(2000));
     res_login = pc.AccountLogin(TEST_ACCOUNT_TWO_USERNAME, TEST_ACCOUNT_TWO_PASSWORD);
     ASSERT_TRUE(res_login);
     ASSERT_EQ(res_login->status, Status::Success);
@@ -2213,15 +2200,8 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_THAT(pc.user_data().ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator"), Contains("logout")));
     ASSERT_NE(pc.user_data().GetAuthTokens()["earner"], prev_earner_token); // should get a different token
     ASSERT_EQ(pc.Balance(), 0); // we haven't yet done a RefreshState
-    post_tokens_timestamp = pc.user_data().GetAuthTokensTimestamp();
-    ASSERT_NE(post_tokens_timestamp, pre_tokens_timestamp);
-    ASSERT_TRUE(tokens_timestamp_dt.FromISO8601(post_tokens_timestamp));
-    ASSERT_NEAR(tokens_timestamp_dt.MillisSinceEpoch(), datetime::DateTime::Now().MillisSinceEpoch(), 5000) << "Try resyncing your local clock";
 
     // Different account, good credentials
-    pre_tokens_timestamp = pc.user_data().GetAuthTokensTimestamp();
-    // Sleep long enough to be sure we'll get a different tokens timestamp (with second resolution)
-    this_thread::sleep_for(chrono::milliseconds(2000));
     res_login = pc.AccountLogin(TEST_ACCOUNT_TWO_USERNAME, TEST_ACCOUNT_TWO_PASSWORD);
     ASSERT_TRUE(res_login);
     ASSERT_EQ(res_login->status, Status::Success);
@@ -2232,10 +2212,6 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_THAT(pc.user_data().ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator"), Contains("logout")));
     ASSERT_NE(pc.user_data().GetAuthTokens()["earner"], prev_earner_token);
     ASSERT_EQ(pc.Balance(), 0); // we haven't yet done a RefreshState
-    post_tokens_timestamp = pc.user_data().GetAuthTokensTimestamp();
-    ASSERT_NE(post_tokens_timestamp, pre_tokens_timestamp);
-    ASSERT_TRUE(tokens_timestamp_dt.FromISO8601(post_tokens_timestamp));
-    ASSERT_NEAR(tokens_timestamp_dt.MillisSinceEpoch(), datetime::DateTime::Now().MillisSinceEpoch(), 5000) << "Try resyncing your local clock";
 
     res_refresh = pc.RefreshState({});
     ASSERT_TRUE(res_refresh);
@@ -2262,7 +2238,7 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
 
 TEST_F(TestPsiCash, AccountLoginMerge) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err);
 
     auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
@@ -2373,7 +2349,7 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
         for (const auto& t : at) {
             at[t.first] = t.second + "-INVALID";
         }
-        pc.user_data().SetAuthTokens(at, datetime::DateTime::Now().ToISO8601(), false, "");
+        pc.user_data().SetAuthTokens(at, false, "");
 
         res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
         ASSERT_TRUE(res_login);
@@ -2395,7 +2371,7 @@ TEST_F(TestPsiCash, AccountLogout) {
     // This also tests the combination of logging in and out
 
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err);
 
     // The instance ID should not change throughout this
@@ -2574,7 +2550,7 @@ TEST_F(TestPsiCash, AccountLogout) {
 
 TEST_F(TestPsiCash, AccountLogoutNeedReconnect) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err);
 
     // Log in with good credentials
@@ -2644,7 +2620,7 @@ TEST_F(TestPsiCash, AccountLogoutNeedReconnect) {
 
 TEST_F(TestPsiCash, PurchaseFromJSON) {
     PsiCashTester pc;
-    auto err = pc.Init(user_agent_, GetTempDir().c_str(), HTTPRequester, false);
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err);
 
     // Basically no diff

@@ -143,7 +143,7 @@ Error PsiCash::MigrateTrackerTokens(const map<string, string>& tokens) {
     // Ignoring return values while writing is paused.
     // Blow away any user state, as the newly migrated tokens are overwriting it.
     (void)ResetUser();
-    (void)user_data_->SetAuthTokens(tokens, datetime::DateTime::Now().ToISO8601(), /*is_account=*/false, /*account_username=*/"");
+    (void)user_data_->SetAuthTokens(tokens, /*is_account=*/false, /*account_username=*/"");
     if (auto err = pauser.Commit()) {
         return WrapError(err, "user data write failed");
     }
@@ -328,14 +328,13 @@ Result<string> PsiCash::ModifyLandingPage(const string& url_string) const {
 
     json psicash_data;
     psicash_data["v"] = 1;
+    psicash_data["tokens_timestamp"] = datetime::DateTime::Now().ToISO8601();
 
     auto auth_tokens = user_data_->GetAuthTokens();
     if (auth_tokens.count(kEarnerTokenType) == 0) {
         psicash_data["tokens"] = nullptr;
-        psicash_data["tokens_timestamp"] = nullptr;
     } else {
         psicash_data["tokens"] = CommaDelimitTokens({kEarnerTokenType});
-        psicash_data["tokens_timestamp"] = user_data_->GetAuthTokensTimestamp();
     }
 
     if (test_) {
@@ -651,20 +650,10 @@ Result<Status> PsiCash::NewTracker() {
                     utils::Stringer("bad number of tokens received: ", auth_tokens.size()));
         }
 
-        datetime::DateTime server_timestamp;
-        auto date_header = utils::FindHeaderValue(result->headers, kDateHeaderKey);
-        if (!server_timestamp.FromRFC7231(date_header)) {
-            // The Date header should always be present and should always be the expected format
-            assert(false);
-            // This is bad and unexpected, but we can fall back to using a local timestamp
-            server_timestamp = datetime::DateTime::Now();
-        }
-
         // Set our new data in a single write.
         UserData::WritePauser pauser(*user_data_);
         (void)user_data_->SetIsLoggedOutAccount(false);
-        (void)user_data_->SetAuthTokens(auth_tokens, server_timestamp.ToISO8601(),
-                                        /*is_account=*/false, /*account_username=*/"");
+        (void)user_data_->SetAuthTokens(auth_tokens, /*is_account=*/false, /*account_username=*/"");
         (void)user_data_->SetBalance(0);
         if (auto err = pauser.Commit()) {
             return WrapError(err, "user data write failed");
@@ -1109,20 +1098,10 @@ error::Result<PsiCash::AccountLoginResponse> PsiCash::AccountLogin(
                     utils::Stringer("bad number of tokens received: ", auth_tokens.size()));
         }
 
-        datetime::DateTime server_timestamp;
-        auto date_header = utils::FindHeaderValue(result->headers, kDateHeaderKey);
-        if (!server_timestamp.FromRFC7231(date_header)) {
-            // The Date header should always be present and should always be the expected format
-            assert(false);
-            // This is bad and unexpected, but we can fall back to using a local timestamp
-            server_timestamp = datetime::DateTime::Now();
-        }
-
         // Set our new data in a single write.
         UserData::WritePauser pauser(*user_data_);
         (void)user_data_->SetIsLoggedOutAccount(false);
-        (void)user_data_->SetAuthTokens(auth_tokens, server_timestamp.ToISO8601(),
-                                        /*is_account=*/true, /*utf8_username=*/utf8_username);
+        (void)user_data_->SetAuthTokens(auth_tokens, /*is_account=*/true, /*utf8_username=*/utf8_username);
         if (auto err = pauser.Commit()) {
             return WrapError(err, "user data write failed");
         }
