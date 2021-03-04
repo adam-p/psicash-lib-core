@@ -812,13 +812,13 @@ string TokenPayloadsMatch(const string &got_base64, const json& want_incomplete)
     want["metadata"]["v"] = 1;
     want["metadata"]["user_agent"] = TestPsiCash::UserAgent();
 
-    // Extract the tokens_timestamp we got, then remove so we can compare the rest
+    // Extract the timestamp we got, then remove so we can compare the rest
     auto got = json::parse(base64::B64Decode(got_base64));
     datetime::DateTime got_tokens_timestamp;
-    if (!got_tokens_timestamp.FromISO8601(got.at("tokens_timestamp").get<string>())) {
+    if (!got_tokens_timestamp.FromISO8601(got.at("timestamp").get<string>())) {
         return "failed to extract timestamp from got_base64";
     }
-    got.erase("tokens_timestamp");
+    got.erase("timestamp");
 
     if (got != want) {
         return utils::Stringer("got!=want; got: >>", got, "<<; want: >>", want, "<<");
@@ -826,7 +826,7 @@ string TokenPayloadsMatch(const string &got_base64, const json& want_incomplete)
 
     auto now = datetime::DateTime::Now();
     auto timestamp_diff_ms = now.MillisSinceEpoch() - got_tokens_timestamp.MillisSinceEpoch();
-    if (timestamp_diff_ms > 3000) {
+    if (timestamp_diff_ms > 1000) {
         return utils::Stringer("timestamps differ too much; now: ", now.MillisSinceEpoch(), "; got: ", got_tokens_timestamp.MillisSinceEpoch(), "; diff: ", timestamp_diff_ms);
     }
 

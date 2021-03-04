@@ -328,7 +328,7 @@ Result<string> PsiCash::ModifyLandingPage(const string& url_string) const {
 
     json psicash_data;
     psicash_data["v"] = 1;
-    psicash_data["tokens_timestamp"] = datetime::DateTime::Now().ToISO8601();
+    psicash_data["timestamp"] = datetime::DateTime::Now().ToISO8601();
 
     auto auth_tokens = user_data_->GetAuthTokens();
     if (auth_tokens.count(kEarnerTokenType) == 0) {
