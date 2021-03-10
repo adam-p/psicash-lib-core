@@ -2190,12 +2190,12 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_THAT(pc.user_data().ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator"), Contains("logout")));
 
     // Log in again with the same account
-    res_login = pc.AccountLogin(TEST_ACCOUNT_TWO_USERNAME, TEST_ACCOUNT_TWO_PASSWORD);
+    res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
     ASSERT_TRUE(res_login);
     ASSERT_EQ(res_login->status, Status::Success);
     ASSERT_TRUE(pc.IsAccount());
     ASSERT_TRUE(pc.AccountUsername());
-    ASSERT_EQ(*pc.AccountUsername(), TEST_ACCOUNT_TWO_USERNAME);
+    ASSERT_EQ(*pc.AccountUsername(), TEST_ACCOUNT_ONE_USERNAME);
     ASSERT_EQ(pc.user_data().ValidTokenTypes().size(), 4);
     ASSERT_THAT(pc.user_data().ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator"), Contains("logout")));
     ASSERT_NE(pc.user_data().GetAuthTokens()["earner"], prev_earner_token); // should get a different token

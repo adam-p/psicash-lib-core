@@ -1051,13 +1051,19 @@ error::Result<PsiCash::AccountLoginResponse> PsiCash::AccountLogin(
     static const vector<string> token_types = {kEarnerTokenType, kSpenderTokenType, kIndicatorTokenType, kLogoutTokenType};
     static const string token_types_str = utils::Join(token_types, ",");
 
+    // If we have tracker tokens, include them to (attempt to) merge the balance.
+    string old_tokens;
+    if (!IsAccount() && HasTokens()) {
+        old_tokens = CommaDelimitTokens({});
+    }
+
     json body =
         {
             {"username", utf8_username},
             {"password", utf8_password},
             {"instanceID", user_data_->GetInstanceID()},
             {"tokenTypes", token_types_str},
-            {"oldTokens", CommaDelimitTokens({})}
+            {"oldTokens", old_tokens}
         };
 
     auto result = MakeHTTPRequestWithRetry(
