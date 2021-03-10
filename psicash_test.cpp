@@ -840,7 +840,7 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     ASSERT_FALSE(err);
 
     const string key_part = "psicash=";
-    const string bang_key_part = "!" + key_part;
+    const string and_key_part = "&" + key_part;
     URL url_in, url_out;
 
     //
@@ -852,8 +852,8 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     ASSERT_TRUE(res);
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
-    ASSERT_EQ(url_out.query_, url_in.query_);
-    ASSERT_THAT(TokenPayloadsMatch(url_out.fragment_.substr(bang_key_part.length()), R"({"tokens":null})"_json), IsEmpty());
+    ASSERT_EQ(url_out.fragment_, url_in.fragment_);
+    ASSERT_THAT(TokenPayloadsMatch(url_out.query_.substr(key_part.length()), R"({"tokens":null})"_json), IsEmpty());
 
     //
     // Add tokens
@@ -869,8 +869,8 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     ASSERT_TRUE(res);
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
-    ASSERT_EQ(url_out.query_, url_in.query_);
-    ASSERT_THAT(TokenPayloadsMatch(url_out.fragment_.substr(bang_key_part.length()), R"({"tokens":null})"_json), IsEmpty());
+    ASSERT_EQ(url_out.fragment_, url_in.fragment_);
+    ASSERT_THAT(TokenPayloadsMatch(url_out.query_.substr(key_part.length()), R"({"tokens":null})"_json), IsEmpty());
 
     // All tokens
     auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
@@ -883,8 +883,8 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     ASSERT_TRUE(res);
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
-    ASSERT_EQ(url_out.query_, url_in.query_);
-    ASSERT_THAT(TokenPayloadsMatch(url_out.fragment_.substr(bang_key_part.length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
+    ASSERT_EQ(url_out.fragment_, url_in.fragment_);
+    ASSERT_THAT(TokenPayloadsMatch(url_out.query_.substr(key_part.length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
 
     //
     // No metadata set
@@ -895,32 +895,32 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     ASSERT_TRUE(res) << res.error();
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
-    ASSERT_EQ(url_out.query_, url_in.query_);
-    ASSERT_THAT(TokenPayloadsMatch(url_out.fragment_.substr(bang_key_part.length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
+    ASSERT_EQ(url_out.fragment_, url_in.fragment_);
+    ASSERT_THAT(TokenPayloadsMatch(url_out.query_.substr(key_part.length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
 
     url_in = {"https://asdf.sadf.gf", "gfaf=asdf", ""};
     res = pc.ModifyLandingPage(url_in.ToString());
     ASSERT_TRUE(res);
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
-    ASSERT_EQ(url_out.query_, url_in.query_);
-    ASSERT_THAT(TokenPayloadsMatch(url_out.fragment_.substr(bang_key_part.length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
+    ASSERT_EQ(url_out.fragment_, url_in.fragment_);
+    ASSERT_THAT(TokenPayloadsMatch(url_out.query_.substr((url_in.query_+and_key_part).length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
 
     url_in = {"https://asdf.sadf.gf/asdfilj/adf", "gfaf=asdf", ""};
     res = pc.ModifyLandingPage(url_in.ToString());
     ASSERT_TRUE(res);
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
-    ASSERT_EQ(url_out.query_, url_in.query_);
-    ASSERT_THAT(TokenPayloadsMatch(url_out.fragment_.substr(bang_key_part.length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
+    ASSERT_EQ(url_out.fragment_, url_in.fragment_);
+    ASSERT_THAT(TokenPayloadsMatch(url_out.query_.substr((url_in.query_+and_key_part).length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
 
     url_in = {"https://asdf.sadf.gf/asdfilj/adf.html", "gfaf=asdf", ""};
     res = pc.ModifyLandingPage(url_in.ToString());
     ASSERT_TRUE(res);
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
-    ASSERT_EQ(url_out.query_, url_in.query_);
-    ASSERT_THAT(TokenPayloadsMatch(url_out.fragment_.substr(bang_key_part.length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
+    ASSERT_EQ(url_out.fragment_, url_in.fragment_);
+    ASSERT_THAT(TokenPayloadsMatch(url_out.query_.substr((url_in.query_+and_key_part).length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
 
     url_in = {"https://asdf.sadf.gf/asdfilj/adf.html", "", "regffd"};
     res = pc.ModifyLandingPage(url_in.ToString());
@@ -935,7 +935,7 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     ASSERT_TRUE(res);
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
-    ASSERT_THAT(TokenPayloadsMatch(url_out.query_.substr((url_in.query_+"&"+key_part).length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
+    ASSERT_THAT(TokenPayloadsMatch(url_out.query_.substr((url_in.query_+and_key_part).length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
     ASSERT_EQ(url_out.fragment_, url_in.fragment_);
 
     //
@@ -949,8 +949,8 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     ASSERT_TRUE(res);
     url_out.Parse(*res);
     ASSERT_EQ(url_out.scheme_host_path_, url_in.scheme_host_path_);
-    ASSERT_EQ(url_out.query_, url_in.query_);
-    ASSERT_THAT(TokenPayloadsMatch(url_out.fragment_.substr(bang_key_part.length()), R"({"metadata":{"k":"v"},"tokens":"kEarnerTokenType"})"_json), IsEmpty());
+    ASSERT_EQ(url_out.fragment_, url_in.fragment_);
+    ASSERT_THAT(TokenPayloadsMatch(url_out.query_.substr(key_part.length()), R"({"metadata":{"k":"v"},"tokens":"kEarnerTokenType"})"_json), IsEmpty());
 
     //
     // Errors

@@ -465,6 +465,8 @@ public:
 protected:
     // See implementation for descriptions of non-public methods.
 
+    error::Result<std::string> AddEarnerTokenToURL(const std::string& url_string, bool query_param_only) const;
+
     nlohmann::json GetRequestMetadata(int attempt) const;
     error::Result<HTTPResult> MakeHTTPRequestWithRetry(
             const std::string& method, const std::string& path, bool include_auth_tokens,

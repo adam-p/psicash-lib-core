@@ -319,7 +319,10 @@ error::Result<Purchases> PsiCash::RemovePurchases(const vector<TransactionID>& i
     return removed_purchases;
 }
 
-Result<string> PsiCash::ModifyLandingPage(const string& url_string) const {
+/// Adds a params package to the URL which includes the user's earner token (if there is one).
+/// @param query_param_only If true, the params will only be added to the query parameters
+///     part of the URL, rather than first attempting to add it to the hash/fragment.
+Result<string> PsiCash::AddEarnerTokenToURL(const string& url_string, bool query_param_only) const {
     URL url;
     auto err = url.Parse(url_string);
     if (err) {
@@ -359,12 +362,13 @@ Result<string> PsiCash::ModifyLandingPage(const string& url_string) const {
     auto encoded_json = URL::Encode(base64::TrimPadding(base64::B64Encode(json_data)), false);
 
     // Our preference is to put the our data into the URL's fragment/hash/anchor,
-    // because we'd prefer the data not be sent to the server.
+    // because we'd prefer the data not be sent to the server nor included in the referrer
+    // header to third-party page resources.
     // But if there already is a fragment value then we'll put our data into the query parameters.
     // (Because altering the fragment is more likely to have negative consequences
     // for the page than adding a query parameter that will be ignored.)
 
-    if (url.fragment_.empty()) {
+    if (!query_param_only && url.fragment_.empty()) {
         // When setting in the fragment, we use "#!psicash=etc". The ! prevents the
         // fragment from accidentally functioning as a jump-to anchor on a landing page
         // (where we don't control element IDs, etc.).
@@ -379,11 +383,16 @@ Result<string> PsiCash::ModifyLandingPage(const string& url_string) const {
     return url.ToString();
 }
 
-// This is just a special case of the landing page format, EXCEPT that tokens MUST be
-// present, or else it's an error.
+Result<string> PsiCash::ModifyLandingPage(const string& url_string) const {
+    // All of our landing pages are arrived at via the redirector service we run. We want
+    // to send our token package to the redirector, so that it can decide if and how to
+    // include it in the final site URL. So we have to send it via a query parameter.
+    return AddEarnerTokenToURL(url_string, true);
+}
+
 Result<string> PsiCash::GetBuyPsiURL() const {
     TOKENS_REQUIRED;
-    return ModifyLandingPage("https://buy.psi.cash/");
+    return AddEarnerTokenToURL("https://buy.psi.cash/", false);
 }
 
 string PsiCash::GetAccountSignupURL() const {
