@@ -2323,48 +2323,37 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
         ASSERT_EQ(pc.Balance(), expected_balance);
     }
 
-    // Force invalid tracker tokens to merge
-    if (pc.MutatorsEnabled()) {
-        starting_balance = pc.Balance();
+    //
+    // Force invalid tracker tokens to merge (will be rejected by server)
+    //
 
-        // Log out and reset so we can get a tracker
-        auto res_logout = pc.AccountLogout();
-        ASSERT_TRUE(res_logout);
-        err = pc.ResetUser();
-        ASSERT_FALSE(err);
+    // Log out and reset so we can get a tracker
+    res_logout = pc.AccountLogout();
+    ASSERT_TRUE(res_logout);
+    err = pc.ResetUser();
+    ASSERT_FALSE(err);
 
-        // Get a new tracker
-        res_refresh = pc.RefreshState({});
-        ASSERT_TRUE(res_refresh) << res_refresh.error();
-        ASSERT_EQ(res_refresh->status, Status::Success);
-        ASSERT_FALSE(pc.IsAccount());
-        ASSERT_TRUE(pc.HasTokens());
-        ASSERT_THAT(pc.Balance(), AllOf(Ge(0), Le(MAX_STARTING_BALANCE)));
+    // Get a new tracker
+    res_refresh = pc.RefreshState({});
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(res_refresh->status, Status::Success);
+    ASSERT_FALSE(pc.IsAccount());
+    ASSERT_TRUE(pc.HasTokens());
+    ASSERT_THAT(pc.Balance(), AllOf(Ge(0), Le(MAX_STARTING_BALANCE)));
 
-        expected_balance = starting_balance; // should be no change, as merge will fail
-
-        // Log in, forcing tracker tokens to be invalid.
-        // Note that the tokens are not passed via the auth header, so we can't use the `"InvalidTokens"` mutator.
-        auto at = pc.user_data().GetAuthTokens();
-        for (const auto& t : at) {
-            at[t.first] = t.second + "-INVALID";
-        }
-        pc.user_data().SetAuthTokens(at, false, "");
-
-        res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
-        ASSERT_TRUE(res_login);
-        ASSERT_EQ(res_login->status, Status::Success);
-        ASSERT_TRUE(res_login->last_tracker_merge);
-        ASSERT_FALSE(*res_login->last_tracker_merge);
-
-        res_refresh = pc.RefreshState({});
-        ASSERT_TRUE(res_refresh) << res_refresh.error();
-        ASSERT_EQ(res_refresh->status, Status::Success);
-        ASSERT_TRUE(pc.IsAccount());
-        ASSERT_TRUE(pc.HasTokens());
-
-        ASSERT_EQ(pc.Balance(), expected_balance);
+    // Log in, forcing tracker tokens to be invalid.
+    // Note that the tokens are not passed via the auth header, so we can't use the `"InvalidTokens"` mutator.
+    auto at = pc.user_data().GetAuthTokens();
+    for (const auto& t : at) {
+        at[t.first] = t.second + "-INVALID";
     }
+    pc.user_data().SetAuthTokens(at, false, "");
+
+    res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::BadRequest);
+    ASSERT_FALSE(pc.IsAccount());
+    ASSERT_TRUE(pc.HasTokens());
 }
 
 TEST_F(TestPsiCash, AccountLogout) {
