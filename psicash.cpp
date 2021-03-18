@@ -392,7 +392,7 @@ Result<string> PsiCash::ModifyLandingPage(const string& url_string) const {
 
 Result<string> PsiCash::GetBuyPsiURL() const {
     TOKENS_REQUIRED;
-    return AddEarnerTokenToURL("https://buy.psi.cash/", false);
+    return AddEarnerTokenToURL(test_ ? "https://dev-psicash.myshopify.com/" : "https://buy.psi.cash/", false);
 }
 
 string PsiCash::GetAccountSignupURL() const {
