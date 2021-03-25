@@ -1009,55 +1009,36 @@ TEST_F(TestPsiCash, GetBuyPsiURL) {
     ASSERT_THAT(TokenPayloadsMatch(url_out.fragment_.substr(bang_key_part.length()), R"({"tokens":"kEarnerTokenType"})"_json), IsEmpty());
 }
 
-TEST_F(TestPsiCash, GetAccountSignupURL) {
+TEST_F(TestPsiCash, GetUserSiteURL) {
     // The only state that affects the URL is the testing/dev and user agent.
 
-    {
-        // Dev env
-        PsiCashTester pc;
-        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false, /*test=*/true);
-        ASSERT_FALSE(err);
+    for (bool test : {false, true}) {
+        for (PsiCash::UserSiteURLType url_type : {PsiCash::UserSiteURLType::AccountSignup, PsiCash::UserSiteURLType::ForgotAccount, PsiCash::UserSiteURLType::AccountManagement}) {
+            for (bool webview : {false, true}) {
+                PsiCashTester pc;
+                auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false, test);
+                ASSERT_FALSE(err);
 
-        auto url = pc.GetAccountSignupURL();
-        ASSERT_NE(url.find("dev-"), string::npos);
-        ASSERT_NE(url.find(TestPsiCash::UserAgent()), string::npos);
-    }
+                auto url = pc.GetUserSiteURL(url_type, webview);
 
-    {
-        // Prod env
-        PsiCashTester pc;
-        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false, /*test=*/false);
-        ASSERT_FALSE(err);
+                ASSERT_NE(url.find("https://"), string::npos);
+                ASSERT_NE(url.find(TestPsiCash::UserAgent()), string::npos);
 
-        auto url = pc.GetAccountSignupURL();
-        ASSERT_EQ(url.find("dev-"), string::npos);
-        ASSERT_NE(url.find(TestPsiCash::UserAgent()), string::npos);
-    }
-}
+                if (test) {
+                    ASSERT_NE(url.find("dev-"), string::npos);
+                }
+                else {
+                    ASSERT_EQ(url.find("dev-"), string::npos);
+                }
 
-TEST_F(TestPsiCash, GetAccountManagementURL) {
-    // The only state that affects the URL is the testing/dev and user agent.
-
-    {
-        // Dev env
-        PsiCashTester pc;
-        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false, /*test=*/true);
-        ASSERT_FALSE(err);
-
-        auto url = pc.GetAccountManagementURL();
-        ASSERT_NE(url.find("dev-"), string::npos);
-        ASSERT_NE(url.find(TestPsiCash::UserAgent()), string::npos);
-    }
-
-    {
-        // Prod env
-        PsiCashTester pc;
-        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false, /*test=*/false);
-        ASSERT_FALSE(err);
-
-        auto url = pc.GetAccountManagementURL();
-        ASSERT_EQ(url.find("dev-"), string::npos);
-        ASSERT_NE(url.find(TestPsiCash::UserAgent()), string::npos);
+                if (webview) {
+                    ASSERT_NE(url.find("#!webview"), string::npos);
+                }
+                else {
+                    ASSERT_EQ(url.find("#!webview"), string::npos);
+                }
+            }
+        }
     }
 }
 

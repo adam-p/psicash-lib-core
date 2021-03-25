@@ -395,16 +395,32 @@ Result<string> PsiCash::GetBuyPsiURL() const {
     return AddEarnerTokenToURL(test_ ? "https://dev-psicash.myshopify.com/" : "https://buy.psi.cash/", false);
 }
 
-string PsiCash::GetAccountSignupURL() const {
-    string url = test_ ? "https://dev-my.psi.cash" : "https://my.psi.cash";
-    url += "/signup?utm_source=" + user_agent_;
-    return url;
-}
+std::string PsiCash::GetUserSiteURL(UserSiteURLType url_type, bool webview) const {
+    URL url;
+    url.scheme_host_path_ = test_ ? "https://dev-my.psi.cash" : "https://my.psi.cash";
 
-string PsiCash::GetAccountManagementURL() const {
-    string url = test_ ? "https://dev-my.psi.cash" : "https://my.psi.cash";
-    url += "/?utm_source=" + user_agent_;
-    return url;
+    switch (url_type) {
+    case UserSiteURLType::AccountSignup:
+        url.scheme_host_path_ += "/signup";
+        break;
+
+    case UserSiteURLType::ForgotAccount:
+        url.scheme_host_path_ += "/forgot";
+        break;
+
+    case UserSiteURLType::AccountManagement:
+    default:
+        // Just the root domain
+        break;
+    }
+
+    url.query_ = "utm_source=" + user_agent_;
+
+    if (webview) {
+        url.fragment_ = "!webview";
+    }
+
+    return url.ToString();
 }
 
 Result<string> PsiCash::GetRewardedActivityData() const {

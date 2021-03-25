@@ -259,11 +259,14 @@ public:
     /// where the user can buy PsiCash for real money.
     error::Result<std::string> GetBuyPsiURL() const;
 
-    /// Returns the URL that should be used for signing up a new account.
-    std::string GetAccountSignupURL() const;
-
-    /// Returns the URL that should be used for managing and existing account.
-    std::string GetAccountManagementURL() const;
+    enum class UserSiteURLType {
+      AccountSignup = 0,
+      AccountManagement,
+      ForgotAccount
+    };
+    /// Returns the `my.psi.cash` URL of the give type.
+    /// If `webview` is true, the URL will be appended to with `#!webview`.
+    std::string GetUserSiteURL(UserSiteURLType url_type, bool webview) const;
 
     /// Creates a data package that should be included with a webhook for a user
     /// action that should be rewarded (such as watching a rewarded video).
