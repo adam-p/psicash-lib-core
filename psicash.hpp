@@ -265,7 +265,7 @@ public:
       ForgotAccount
     };
     /// Returns the `my.psi.cash` URL of the give type.
-    /// If `webview` is true, the URL will be appended to with `#!webview`.
+    /// If `webview` is true, the URL will be appended to with `?webview=true`.
     std::string GetUserSiteURL(UserSiteURLType url_type, bool webview) const;
 
     /// Creates a data package that should be included with a webhook for a user

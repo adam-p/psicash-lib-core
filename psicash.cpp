@@ -417,7 +417,7 @@ std::string PsiCash::GetUserSiteURL(UserSiteURLType url_type, bool webview) cons
     url.query_ = "utm_source=" + user_agent_;
 
     if (webview) {
-        url.fragment_ = "!webview";
+        url.query_ += "&webview=true";
     }
 
     return url.ToString();

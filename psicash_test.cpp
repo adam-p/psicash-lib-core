@@ -1022,7 +1022,7 @@ TEST_F(TestPsiCash, GetUserSiteURL) {
                 auto url = pc.GetUserSiteURL(url_type, webview);
 
                 ASSERT_NE(url.find("https://"), string::npos);
-                ASSERT_NE(url.find(TestPsiCash::UserAgent()), string::npos);
+                ASSERT_NE(url.find(TestPsiCash::UserAgent()), string::npos) << url;
 
                 if (test) {
                     ASSERT_NE(url.find("dev-"), string::npos);
@@ -1032,10 +1032,10 @@ TEST_F(TestPsiCash, GetUserSiteURL) {
                 }
 
                 if (webview) {
-                    ASSERT_NE(url.find("#!webview"), string::npos);
+                    ASSERT_NE(url.find("webview"), string::npos);
                 }
                 else {
-                    ASSERT_EQ(url.find("#!webview"), string::npos);
+                    ASSERT_EQ(url.find("webview"), string::npos);
                 }
             }
         }
