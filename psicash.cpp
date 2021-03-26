@@ -1014,7 +1014,7 @@ Result<PsiCash::NewExpiringPurchaseResponse> PsiCash::NewExpiringPurchase(
     return *response;
 }
 
-Result<PsiCash::AccountLogoutResponse> PsiCash::AccountLogout() {
+Result<PsiCash::AccountLogoutResponse> PsiCash::AccountLogout(bool local_only) {
     TOKENS_REQUIRED;
 
     if (!IsAccount()) {
@@ -1025,27 +1025,29 @@ Result<PsiCash::AccountLogoutResponse> PsiCash::AccountLogout() {
     // one means we will need to reconnect after logging out.
     bool reconnect_required = !GetAuthorizations(true).empty();
 
-    Error httpErr;
-    auto result = MakeHTTPRequestWithRetry(
-            kMethodPOST,
-            "/logout",
-            true,  // include auth tokens
-            {},
-            nullopt // body
-    );
-    if (!result) {
-        httpErr = result.error();
+    if (!local_only) {
+        Error httpErr;
+        auto result = MakeHTTPRequestWithRetry(
+                kMethodPOST,
+                "/logout",
+                true,  // include auth tokens
+                {},
+                nullopt // body
+        );
+        if (!result) {
+            httpErr = result.error();
+        }
+        else if (result->code != kHTTPStatusOK) {
+            httpErr = MakeNoncriticalError(utils::Stringer("logout request failed; code:", result->code, "; body:", result->body));
+        }
+        // Even if an error occurred, we still want to do the local logout, so carry on.
     }
-    else if (result->code != kHTTPStatusOK) {
-        httpErr = MakeNoncriticalError(utils::Stringer("logout request failed; code:", result->code, "; body:", result->body));
-    }
-    // Even if an error occurred, we still want to do the local logout, so carry on.
 
     auto localErr = user_data_->DeleteUserData(true);
 
     // The localErr is a more significant failure, so check it first.
     if (localErr) {
-        return WrapError(localErr, "LocalLogout failed");
+        return WrapError(localErr, "local AccountLogout failed");
     }
     /*
     // We are not returning an error if the remote request failed. We have already

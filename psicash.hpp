@@ -409,6 +409,10 @@ public:
     /**
     Logs out a currently logged-in account.
 
+    Input parameters:
+    • local_only: If true, no logout request will be made to the server, and user data
+      only be cleared locally. This should only be true when there is no tunnel available.
+
     Result fields:
     • error: If set, the request failed utterly and no other params are valid.
     • reconnect_required: If true, a reconnect is required due to the effects of this call.
@@ -427,7 +431,7 @@ public:
     struct AccountLogoutResponse {
         bool reconnect_required;
     };
-    error::Result<AccountLogoutResponse> AccountLogout();
+    error::Result<AccountLogoutResponse> AccountLogout(bool local_only);
 
     /**
     Attempts to log the current user into an account. Will attempt to merge any available
