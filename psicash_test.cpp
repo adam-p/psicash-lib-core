@@ -176,7 +176,7 @@ TEST_F(TestPsiCash, InitReset) {
         expected_instance_id = pc.user_data().GetInstanceID();
 
         auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
-        ASSERT_TRUE(res_login);
+        ASSERT_TRUE(res_login) << res_login.error();
         ASSERT_EQ(res_login->status, Status::Success);
         ASSERT_TRUE(pc.IsAccount());
         ASSERT_TRUE(pc.HasTokens());
@@ -298,9 +298,10 @@ TEST_F(TestPsiCash, MigrateTrackerTokens) {
         ASSERT_GE(pc.GetPurchasePrices().size(), 2);
 
         map<string, string> tokens = {{"a", "a"}, {"b", "b"}, {"c", "c"}};
+        AuthTokens auth_tokens = {{"a", {"a"}}, {"b", {"b"}}, {"c", {"c"}}};
         err = pc.MigrateTrackerTokens(tokens);
         ASSERT_FALSE(err);
-        ASSERT_EQ(pc.user_data().GetAuthTokens(), tokens);
+        ASSERT_TRUE(AuthTokenSetsEqual(pc.user_data().GetAuthTokens(), auth_tokens));
         ASSERT_FALSE(pc.IsAccount());
         ASSERT_FALSE(pc.AccountUsername());
         ASSERT_EQ(pc.Balance(), 0);
@@ -369,9 +370,32 @@ TEST_F(TestPsiCash, HasTokens) {
 
         ASSERT_FALSE(pc.HasTokens());
 
-        AuthTokens at = {{"a", "a"}, {"b", "b"}, {"c", "c"}};
+        // No expiry, bad types
+        AuthTokens at = {{"a", {"a"}}, {"b", {"b"}}, {"c", {"c"}}};
         err = pc.user_data().SetAuthTokens(at, false, "");
-        // We have tokens, but not the right ones
+        ASSERT_FALSE(pc.HasTokens());
+
+        // No expiry, good types
+        at = {{"earner", {"a"}}, {"indicator", {"b"}}, {"spender", {"c"}}};
+        err = pc.user_data().SetAuthTokens(at, false, "");
+        ASSERT_TRUE(pc.HasTokens());
+
+        // Expiries in the future, bad types
+        auto future = datetime::DateTime::Now().Add(datetime::Duration(10000));
+        at = {{"a", {"a", future}}, {"b", {"b", future}}, {"c", {"c", future}}};
+        err = pc.user_data().SetAuthTokens(at, true, "username");
+        ASSERT_FALSE(pc.HasTokens());
+
+        // Expiries in the future, good types
+        at = {{"indicator", {"a", future}}, {"spender", {"b", future}}, {"earner", {"c", future}}, {"logout", {"c", future}}};
+        err = pc.user_data().SetAuthTokens(at, true, "username");
+        ASSERT_TRUE(pc.HasTokens());
+
+        // One expiry in the past, good types
+        auto past = datetime::DateTime::Now().Sub(datetime::Duration(10000));
+        at = {{"indicator", {"a", past}}, {"spender", {"b", future}}, {"earner", {"c", future}}, {"logout", {"c", future}}};
+        err = pc.user_data().SetAuthTokens(at, true, "username");
+        // A full set is required for validity
         ASSERT_FALSE(pc.HasTokens());
     }
     {
@@ -860,8 +884,8 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     //
 
     // Some tokens, but no earner token (different code path)
-    AuthTokens auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
-                              {kIndicatorTokenType, "kIndicatorTokenType"}};
+    AuthTokens auth_tokens = {{kSpenderTokenType, {"kSpenderTokenType"}},
+                              {kIndicatorTokenType, {"kIndicatorTokenType"}}};
     err = pc.user_data().SetAuthTokens(auth_tokens, false, "");
     ASSERT_FALSE(err);
     url_in = {"https://asdf.sadf.gf", "", ""};
@@ -873,9 +897,9 @@ TEST_F(TestPsiCash, ModifyLandingPage) {
     ASSERT_THAT(TokenPayloadsMatch(url_out.query_.substr(key_part.length()), R"({"tokens":null})"_json), IsEmpty());
 
     // All tokens
-    auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
-                   {kEarnerTokenType, "kEarnerTokenType"},
-                   {kIndicatorTokenType, "kIndicatorTokenType"}};
+    auth_tokens = {{kSpenderTokenType, {"kSpenderTokenType"}},
+                   {kEarnerTokenType, {"kEarnerTokenType"}},
+                   {kIndicatorTokenType, {"kIndicatorTokenType"}}};
     err = pc.user_data().SetAuthTokens(auth_tokens, false, "");
     ASSERT_FALSE(err);
     url_in = {"https://asdf.sadf.gf", "", ""};
@@ -986,8 +1010,8 @@ TEST_F(TestPsiCash, GetBuyPsiURL) {
     //
 
     // Some tokens, but no earner token (different code path)
-    AuthTokens auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
-                              {kIndicatorTokenType, "kIndicatorTokenType"}};
+    AuthTokens auth_tokens = {{kSpenderTokenType, {"kSpenderTokenType"}},
+                              {kIndicatorTokenType, {"kIndicatorTokenType"}}};
     err = pc.user_data().SetAuthTokens(auth_tokens, false, "");
     ASSERT_FALSE(err);
     res = pc.GetBuyPsiURL();
@@ -997,9 +1021,9 @@ TEST_F(TestPsiCash, GetBuyPsiURL) {
     // With tokens
     //
 
-    auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
-                   {kEarnerTokenType, "kEarnerTokenType"},
-                   {kIndicatorTokenType, "kIndicatorTokenType"}};
+    auth_tokens = {{kSpenderTokenType, {"kSpenderTokenType"}},
+                   {kEarnerTokenType, {"kEarnerTokenType"}},
+                   {kIndicatorTokenType, {"kIndicatorTokenType"}}};
     err = pc.user_data().SetAuthTokens(auth_tokens, false, "");
     ASSERT_FALSE(err);
     res = pc.GetBuyPsiURL();
@@ -1051,9 +1075,9 @@ TEST_F(TestPsiCash, GetRewardedActivityData) {
     auto res = pc.GetRewardedActivityData();
     ASSERT_FALSE(res);
 
-    AuthTokens auth_tokens = {{kSpenderTokenType, "kSpenderTokenType"},
-                              {kEarnerTokenType, "kEarnerTokenType"},
-                              {kIndicatorTokenType, "kIndicatorTokenType"}};
+    AuthTokens auth_tokens = {{kSpenderTokenType, {"kSpenderTokenType"}},
+                              {kEarnerTokenType, {"kEarnerTokenType"}},
+                              {kIndicatorTokenType, {"kIndicatorTokenType"}}};
     err = pc.user_data().SetAuthTokens(auth_tokens, false, "");
     ASSERT_FALSE(err);
 
@@ -1112,7 +1136,7 @@ TEST_F(TestPsiCash, GetDiagnosticInfo) {
         pc.user_data().SetPurchasePrices({{"tc1", "d1", 123}, {"tc2", "d2", 321}});
         pc.user_data().SetPurchases(
                 {{"id2", datetime::DateTime(), "tc2", "d2", nonstd::nullopt, nonstd::nullopt, nonstd::nullopt}});
-        pc.user_data().SetAuthTokens({{"a", "a"}, {"b", "b"}, {"c", "c"}}, true, "username");
+        pc.user_data().SetAuthTokens({{"a", {"a"}}, {"b", {"b"}}, {"c", {"c"}}}, true, "username");
         // pc.user_data().SetServerTimeDiff() // too hard to do reliably
         want = R"|({
         "balance":12345,
@@ -1174,7 +1198,7 @@ TEST_F(TestPsiCash, RefreshState) {
     ASSERT_THAT(pc.Balance(), AllOf(Ge(0), Le(MAX_STARTING_BALANCE)));
     auto speed_boost_purchase_prices = pc.GetPurchasePrices();
     ASSERT_GE(pc.GetPurchasePrices().size(), 2);
-    ASSERT_EQ(want_tokens, pc.user_data().GetAuthTokens());
+    ASSERT_TRUE(AuthTokenSetsEqual(want_tokens, pc.user_data().GetAuthTokens()));
 
     // Multiple purchase classes
     pc.user_data().Clear();
@@ -1547,7 +1571,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     // We should have brand new tokens now.
     auto next_tokens = pc.user_data().GetAuthTokens();
     ASSERT_GE(next_tokens.size(), 3);
-    ASSERT_NE(prev_tokens, next_tokens);
+    ASSERT_FALSE(AuthTokenSetsEqual(prev_tokens, next_tokens));
     // And a reset balance
     ASSERT_THAT(pc.Balance(), AllOf(Ge(0), Le(MAX_STARTING_BALANCE)));
 
@@ -1611,7 +1635,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     res = pc.RefreshState({});
     ASSERT_FALSE(res) << static_cast<int>(res->status);
     // Tokens should be unchanged
-    ASSERT_EQ(auth_tokens, pc.user_data().GetAuthTokens());
+    ASSERT_TRUE(AuthTokenSetsEqual(auth_tokens, pc.user_data().GetAuthTokens()));
 
     // NewTracker response with no data
     // Blow away any existing tokens to force internal NewTracker.
@@ -1637,7 +1661,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     res = pc.RefreshState({});
     ASSERT_FALSE(res) << static_cast<int>(res->status);
     // Tokens should be unchanged
-    ASSERT_EQ(auth_tokens, pc.user_data().GetAuthTokens());
+    ASSERT_TRUE(AuthTokenSetsEqual(auth_tokens, pc.user_data().GetAuthTokens()));
 
     // NewTracker response with bad JSON
     // Blow away any existing tokens to force internal NewTracker.
@@ -1663,7 +1687,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     res = pc.RefreshState({});
     ASSERT_FALSE(res) << static_cast<int>(res->status);
     // Tokens should be unchanged
-    ASSERT_EQ(auth_tokens, pc.user_data().GetAuthTokens());
+    ASSERT_TRUE(AuthTokenSetsEqual(auth_tokens, pc.user_data().GetAuthTokens()));
 
     // 1 NewTracker response is 500 (retry succeeds)
     // Blow away any existing tokens to force internal NewTracker.
@@ -1744,7 +1768,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::ServerError) << static_cast<int>(res->status);
     // Tokens should be unchanged
-    ASSERT_EQ(auth_tokens, pc.user_data().GetAuthTokens());
+    ASSERT_TRUE(AuthTokenSetsEqual(auth_tokens, pc.user_data().GetAuthTokens()));
 
     // RefreshState response with status code indicating invalid tokens
     pc.user_data().Clear();
@@ -1786,7 +1810,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     res = pc.RefreshState({});
     ASSERT_FALSE(res) << static_cast<int>(res->status);
     // Tokens should be unchanged
-    ASSERT_EQ(auth_tokens, pc.user_data().GetAuthTokens());
+    ASSERT_TRUE(AuthTokenSetsEqual(auth_tokens, pc.user_data().GetAuthTokens()));
 }
 
 TEST_F(TestPsiCash, NewExpiringPurchase) {
@@ -2141,7 +2165,7 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_EQ(pc.user_data().ValidTokenTypes().size(), 4);
     ASSERT_THAT(pc.user_data().ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator"), Contains("logout")));
     ASSERT_EQ(pc.Balance(), 0); // we haven't called RefreshState yet
-    auto prev_earner_token = pc.user_data().GetAuthTokens()["earner"];
+    auto prev_earner_token = pc.user_data().GetAuthTokens()["earner"].id;
 
     auto res_refresh = pc.RefreshState({});
     ASSERT_TRUE(res_refresh);
@@ -2179,7 +2203,7 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_EQ(*pc.AccountUsername(), TEST_ACCOUNT_ONE_USERNAME);
     ASSERT_EQ(pc.user_data().ValidTokenTypes().size(), 4);
     ASSERT_THAT(pc.user_data().ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator"), Contains("logout")));
-    ASSERT_NE(pc.user_data().GetAuthTokens()["earner"], prev_earner_token); // should get a different token
+    ASSERT_NE(pc.user_data().GetAuthTokens()["earner"].id, prev_earner_token); // should get a different token
     ASSERT_EQ(pc.Balance(), 0); // we haven't yet done a RefreshState
 
     // Different account, good credentials
@@ -2191,7 +2215,7 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_EQ(*pc.AccountUsername(), TEST_ACCOUNT_TWO_USERNAME);
     ASSERT_EQ(pc.user_data().ValidTokenTypes().size(), 4);
     ASSERT_THAT(pc.user_data().ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator"), Contains("logout")));
-    ASSERT_NE(pc.user_data().GetAuthTokens()["earner"], prev_earner_token);
+    ASSERT_NE(pc.user_data().GetAuthTokens()["earner"].id, prev_earner_token);
     ASSERT_EQ(pc.Balance(), 0); // we haven't yet done a RefreshState
 
     res_refresh = pc.RefreshState({});
@@ -2208,7 +2232,7 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_EQ(*pc.AccountUsername(), TEST_ACCOUNT_UNICODE_USERNAME);
     ASSERT_EQ(pc.user_data().ValidTokenTypes().size(), 4);
     ASSERT_THAT(pc.user_data().ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator"), Contains("logout")));
-    ASSERT_NE(pc.user_data().GetAuthTokens()["earner"], prev_earner_token);
+    ASSERT_NE(pc.user_data().GetAuthTokens()["earner"].id, prev_earner_token);
     ASSERT_EQ(pc.Balance(), 0); // we haven't yet done a RefreshState
 
     res_refresh = pc.RefreshState({});
@@ -2326,7 +2350,7 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
     // Note that the tokens are not passed via the auth header, so we can't use the `"InvalidTokens"` mutator.
     auto at = pc.user_data().GetAuthTokens();
     for (const auto& t : at) {
-        at[t.first] = t.second + "-INVALID";
+        at[t.first].id = at[t.first].id + "-INVALID";
     }
     pc.user_data().SetAuthTokens(at, false, "");
 
@@ -2382,7 +2406,7 @@ TEST_F(TestPsiCash, AccountLogout) {
     ASSERT_THAT(pc.user_data().ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator"), Contains("logout")));
     ASSERT_EQ(pc.Balance(), 0); // we haven't called RefreshState yet
     ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
-    auto prev_earner_token = pc.user_data().GetAuthTokens()["earner"];
+    auto prev_earner_token = pc.user_data().GetAuthTokens()["earner"].id;
 
     res_refresh = pc.RefreshState({});
     ASSERT_TRUE(res_refresh);
@@ -2420,9 +2444,9 @@ TEST_F(TestPsiCash, AccountLogout) {
     ASSERT_EQ(pc.user_data().ValidTokenTypes().size(), 4);
     ASSERT_THAT(pc.user_data().ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator"), Contains("logout")));
     ASSERT_EQ(pc.Balance(), 0); // we haven't called RefreshState yet
-    ASSERT_NE(pc.user_data().GetAuthTokens()["earner"], prev_earner_token); // different token
+    ASSERT_NE(pc.user_data().GetAuthTokens()["earner"].id, prev_earner_token); // different token
     ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
-    prev_earner_token = pc.user_data().GetAuthTokens()["earner"];
+    prev_earner_token = pc.user_data().GetAuthTokens()["earner"].id;
 
     // Log out, reset, log in with a different user (without first getting a new tracker)
     res_logout = pc.AccountLogout(false);
@@ -2451,7 +2475,7 @@ TEST_F(TestPsiCash, AccountLogout) {
     ASSERT_TRUE(pc.HasTokens());
     ASSERT_TRUE(pc.AccountUsername());
     ASSERT_EQ(*pc.AccountUsername(), TEST_ACCOUNT_TWO_USERNAME);
-    ASSERT_NE(pc.user_data().GetAuthTokens()["earner"], prev_earner_token); // different token
+    ASSERT_NE(pc.user_data().GetAuthTokens()["earner"].id, prev_earner_token); // different token
     ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
 
     res_logout = pc.AccountLogout(false);

@@ -188,31 +188,107 @@ error::Error UserData::SetServerTimeDiff(const datetime::DateTime& serverTimeNow
     return PassError(datastore_.Set(kServerTimeDiffPtr, datetime::DurationToInt64(diff)));
 }
 
+/* There are two JSON formats that we might receive for tokens, and we'll handle them both.
+NewTracker:
+    {
+        "earner": <token>,
+        "spender": <token>,
+        "indicator": <token>
+    }
+
+Login:
+    {
+        "earner": {
+            "ID": "token",
+            "Expiry": "<RFC 3339>"
+        },
+        ...
+    }
+
+Note that the NewTracker style was used in our pre-accounts datastore and the Login style
+is used now, so this multi-format reading support allows for easy migration.
+*/
+void from_json(const json& j, AuthTokens& v) {
+    for (const auto& it : j.items()) {
+        if (it.value().is_string()) {
+            // NewTracker style
+            v[it.key()] = TokenInfo{ it.value().get<string>(), nonstd::nullopt };
+        }
+        else {
+            // Login style
+            v[it.key()] = TokenInfo{ it.value().at("ID").get<string>(), nonstd::nullopt };
+            if (it.value().at("Expiry").is_string()) {
+                v[it.key()].server_time_expiry = it.value().at("Expiry").get<datetime::DateTime>();
+            }
+        }
+    }
+}
+
+// We are serializing (into the datastore) the same format used by the server's Login response
+void to_json(json& j, const AuthTokens& v) {
+    j = json::object();
+    for (const auto& it : v) {
+        j[it.first] = {
+            { "ID", it.second.id },
+            { "Expiry", nullptr }
+        };
+        if (it.second.server_time_expiry) {
+            j[it.first]["Expiry"] = *it.second.server_time_expiry;
+        }
+    }
+}
+
 AuthTokens UserData::GetAuthTokens() const {
     auto v = datastore_.Get<AuthTokens>(kAuthTokensPtr);
     if (!v) {
         return AuthTokens();
     }
-    return *v;
+
+    // We only return non-expired tokens. This is the only point where we check token expiry.
+    auto now = datetime::DateTime::Now();
+    AuthTokens valid_auth_tokens;
+    for (const auto& token : *v) {
+        bool not_expired = true;
+        if (token.second.server_time_expiry) {
+            auto local_expiry = token.second.server_time_expiry->Sub(GetServerTimeDiff());
+            if (local_expiry < now) {
+                not_expired = false;
+            }
+        }
+
+        if (not_expired) {
+            valid_auth_tokens[token.first] = token.second;
+        }
+    }
+
+    return valid_auth_tokens;
 }
 
 error::Error UserData::SetAuthTokens(const AuthTokens& v, bool is_account, const std::string& utf8_username) {
     WritePauser pauser(*this);
     // Not checking errors while paused, as there's no error that can occur.
-    (void)datastore_.Set(kAuthTokensPtr, v);
+    json json_tokens;
+    to_json(json_tokens, v);
+    (void)datastore_.Set(kAuthTokensPtr, json_tokens);
     (void)datastore_.Set(kIsAccountPtr, is_account);
     (void)datastore_.Set(kAccountUsernamePtr, utf8_username);
     return PassError(pauser.Commit()); // write
 }
 
 error::Error UserData::CullAuthTokens(const std::map<std::string, bool>& valid_tokens) {
+    // There's no guarantee that the tokens in valid_tokens will be idential to the tokens
+    // we have stored -- although they really should be. We're going to interpret the
+    // absence of a stored token from valid_tokens as an indicator that it's invalid.
+    // (There's no much we can do about the presence of a token in valid_tokens that we
+    // don't have stored. We'll ignore it.)
+
     auto all_auth_tokens = GetAuthTokens();
     AuthTokens good_auth_tokens;
 
-    // all_auth_tokens is { "earner": "ABCD0123" } and valid_tokens is { "ABCD0123": true }
+    // all_auth_tokens is { "earner": {ID: "ABCD0123", Expiry: <>} } and valid_tokens is { "ABCD0123": true }
     for (const auto& t : all_auth_tokens) {
         for (const auto& vtt : valid_tokens) {
-            if (vtt.first == t.second && vtt.second) {
+            if (vtt.first == t.second.id && vtt.second) {
                 good_auth_tokens[t.first] = t.second;
                 break;
             }
@@ -225,7 +301,9 @@ error::Error UserData::CullAuthTokens(const std::map<std::string, bool>& valid_t
 psicash::TokenTypes UserData::ValidTokenTypes() const {
     auto auth_tokens = GetAuthTokens();
     vector<string> valid_token_types;
-    std::transform(auth_tokens.begin(), auth_tokens.end(), std::back_inserter(valid_token_types), [](const auto& t) -> string { return t.first; });
+    for (const auto& it : auth_tokens) {
+        valid_token_types.push_back(it.first);
+    }
     return valid_token_types;
 }
 

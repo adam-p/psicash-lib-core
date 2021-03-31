@@ -31,7 +31,10 @@ namespace psicash {
 
 extern const nlohmann::json::json_pointer kRequestMetadataPtr; // only for use in template method below
 
-using AuthTokens = std::map<std::string, std::string>;
+struct TokenInfo { std::string id; nonstd::optional<datetime::DateTime> server_time_expiry; };
+using AuthTokens = std::map<std::string, TokenInfo>; // type to token info
+void to_json(nlohmann::json& j, const AuthTokens& v);
+void from_json(const nlohmann::json& j, AuthTokens& v);
 using TokenTypes = std::vector<std::string>;
 
 // These are the possible token types.

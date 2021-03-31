@@ -139,11 +139,18 @@ Error PsiCash::ResetUser() {
 
 Error PsiCash::MigrateTrackerTokens(const map<string, string>& tokens) {
     MUST_BE_INITIALIZED;
+
+    AuthTokens auth_tokens;
+    for (const auto& it : tokens) {
+        auth_tokens[it.first].id = it.second;
+        // leave expiry null
+    }
+
     UserData::WritePauser pauser(*user_data_);
     // Ignoring return values while writing is paused.
     // Blow away any user state, as the newly migrated tokens are overwriting it.
     (void)ResetUser();
-    (void)user_data_->SetAuthTokens(tokens, /*is_account=*/false, /*account_username=*/"");
+    (void)user_data_->SetAuthTokens(auth_tokens, /*is_account=*/false, /*account_username=*/"");
     if (auto err = pauser.Commit()) {
         return WrapError(err, "user data write failed");
     }
@@ -167,7 +174,7 @@ bool PsiCash::HasTokens() const {
     MUST_BE_INITIALIZED;
 
     // Trackers and Accounts both require the same token types (for now).
-    // (Accounts will also havethe "logout" type, but it isn't strictly needed for sane operation.)
+    // (Accounts will also have the "logout" type, but it isn't strictly needed for sane operation.)
     vector<string> required_token_types = {kEarnerTokenType, kSpenderTokenType, kIndicatorTokenType};
     auto auth_tokens = user_data_->GetAuthTokens();
     for (const auto& it : auth_tokens) {
@@ -434,7 +441,7 @@ Result<string> PsiCash::GetRewardedActivityData() const {
     if (auth_tokens.empty()) {
         return MakeCriticalError("earner token missing; can't create webhoook data");
     } else {
-        psicash_data["tokens"] = auth_tokens[kEarnerTokenType];
+        psicash_data["tokens"] = auth_tokens[kEarnerTokenType].id;
     }
 
     // Get the metadata (sponsor ID, etc.)
@@ -631,7 +638,7 @@ std::string PsiCash::CommaDelimitTokens(const std::vector<std::string>& types) c
     vector<string> tokens;
     for (const auto& at : user_data_->GetAuthTokens()) {
         if (types.empty() || std::find(types.begin(), types.end(), at.first) != types.end()) {
-            tokens.push_back(at.second);
+            tokens.push_back(at.second.id);
         }
     }
     return utils::Join(tokens, ",");

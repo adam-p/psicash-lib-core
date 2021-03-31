@@ -10,6 +10,7 @@
 #include <iostream>
 #include <fstream>
 #include "gtest/gtest.h"
+#include "userdata.hpp"
 
 class TempDir
 {
@@ -135,5 +136,7 @@ template<typename T, typename U>
 
     return ::testing::AssertionSuccess();
 }
+
+bool AuthTokenSetsEqual(const psicash::AuthTokens& at1, const psicash::AuthTokens& at2);
 
 #endif // PSICASHLIB_TEST_HELPERS_H

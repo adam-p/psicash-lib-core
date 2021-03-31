@@ -47,11 +47,8 @@ TEST_F(TestUserData, InitUpgrade)
     ASSERT_GT(ud.GetInstanceID().length(), 0);
     ASSERT_FALSE(ud.GetIsLoggedOutAccount());
     ASSERT_EQ(ud.GetServerTimeDiff().count(), -2584);
-    auto auth_tokens = ud.GetAuthTokens();
-    ASSERT_EQ(auth_tokens.size(), 3);
-    ASSERT_EQ(auth_tokens["earner"], "earnertoken");
-    ASSERT_EQ(auth_tokens["indicator"], "indicatortoken");
-    ASSERT_EQ(auth_tokens["spender"], "spendertoken");
+    AuthTokens want_tokens = {{"earner",{"earnertoken",nullopt}},{"indicator",{"indicatortoken",nullopt}},{"spender",{"spendertoken",nullopt}}};
+    ASSERT_TRUE(AuthTokenSetsEqual(ud.GetAuthTokens(), want_tokens));
     ASSERT_FALSE(ud.GetIsAccount());
     ASSERT_EQ(ud.GetAccountUsername(), "");
     ASSERT_EQ(ud.GetBalance(), 125000000000L);
@@ -79,7 +76,8 @@ TEST_F(TestUserData, Persistence)
 {
     auto want_server_time_diff_ms = 54321;
     auto want_server_time_diff = datetime::Duration(want_server_time_diff_ms);
-    AuthTokens want_auth_tokens = {{"k1", "v1"}, {"k2", "v2"}};
+    auto future = datetime::DateTime::Now().Add(datetime::Duration(want_server_time_diff_ms*2)); // if this is less than want_server_time_diff_ms, the tokens will be expired already
+    AuthTokens want_auth_tokens = {{"k1", {"v1", nullopt}}, {"k2", {"v2", future}}, {"k3", {"v3", future}}};
     bool want_is_account = true;
     string want_account_username = "account-username"s;
     int64_t want_balance = 12345;
@@ -128,7 +126,7 @@ TEST_F(TestUserData, Persistence)
         ASSERT_NEAR(want_server_time_diff.count(), got_server_time_diff.count(), 10);
 
         auto got_auth_tokens = ud.GetAuthTokens();
-        ASSERT_EQ(got_auth_tokens, want_auth_tokens);
+        ASSERT_TRUE(AuthTokenSetsEqual(got_auth_tokens, want_auth_tokens));
 
         auto got_is_account = ud.GetIsAccount();
         ASSERT_EQ(got_is_account, want_is_account);
@@ -271,12 +269,15 @@ TEST_F(TestUserData, AuthTokens)
     auto is_account = ud.GetIsAccount();
     ASSERT_EQ(is_account, false);
 
-    // Set then get
-    AuthTokens want = {{"k1", "v1"}, {"k2", "v2"}};
+    auto past = datetime::DateTime::Now().Sub(datetime::Duration(10000));
+    auto future = datetime::DateTime::Now().Add(datetime::Duration(10000));
+
+    // All tokens in the future
+    AuthTokens want = {{"k1", {"v1", future}}, {"k2", {"v2", future}}};
     err = ud.SetAuthTokens(want, false, "");
     ASSERT_FALSE(err);
     auto got_tokens = ud.GetAuthTokens();
-    ASSERT_EQ(want, got_tokens);
+    ASSERT_TRUE(AuthTokenSetsEqual(want, got_tokens));
 
     is_account = ud.GetIsAccount();
     ASSERT_EQ(is_account, false);
@@ -285,20 +286,27 @@ TEST_F(TestUserData, AuthTokens)
     err = ud.SetAuthTokens(want, true, "tokens-username");
     ASSERT_FALSE(err);
     got_tokens = ud.GetAuthTokens();
-    ASSERT_EQ(want, got_tokens);
+    ASSERT_TRUE(AuthTokenSetsEqual(want, got_tokens));
     is_account = ud.GetIsAccount();
     ASSERT_EQ(is_account, true);
     ASSERT_EQ(ud.GetAccountUsername(), "tokens-username");
 
+    // One token in the past
+    want = {{"k1", {"v1", past}}, {"k2", {"v2", future}}};
+    err = ud.SetAuthTokens(want, false, "");
+    ASSERT_FALSE(err);
+    got_tokens = ud.GetAuthTokens();
+    ASSERT_EQ(want.size()-1, got_tokens.size()); // should hae got one less token back
+
     // CullAuthTokens
-    err = ud.SetAuthTokens({{"k1","v1"},{"k2","v2"},{"k3","v3"},{"k4","v4"},}, false, "");
+    err = ud.SetAuthTokens({{"k1",{"v1"}},{"k2",{"v2"}},{"k3",{"v3"}},{"k4",{"v4"}},}, false, "");
     ASSERT_FALSE(err);
     std::map<std::string, bool> valid_tokens = {{"v1",true},{"v2",false},{"v3",true}};
-    want = {{"k1","v1"},{"k3","v3"}};
+    want = {{"k1",{"v1"}},{"k3",{"v3"}}};
     err = ud.CullAuthTokens(valid_tokens);
     ASSERT_FALSE(err);
     got_tokens = ud.GetAuthTokens();
-    ASSERT_EQ(want, got_tokens);
+    ASSERT_TRUE(AuthTokenSetsEqual(want, got_tokens));
 }
 
 TEST_F(TestUserData, ValidTokenTypes) {
@@ -308,7 +316,7 @@ TEST_F(TestUserData, ValidTokenTypes) {
 
     ASSERT_EQ(ud.ValidTokenTypes().size(), 0);
 
-    AuthTokens at = {{"a", "a"}, {"b", "b"}, {"c", "c"}};
+    AuthTokens at = {{"a", {"a"}}, {"b", {"b"}}, {"c", {"c"}}};
     err = ud.SetAuthTokens(at, false, "");
     auto vtt = ud.ValidTokenTypes();
     ASSERT_EQ(vtt.size(), 3);
@@ -354,14 +362,15 @@ TEST_F(TestUserData, AccountUsername)
 
     // Set then get
     string want = "account-username";
-    AuthTokens at = {{"a", "a"}, {"b", "b"}, {"c", "c"}};
+    auto future = datetime::DateTime::Now().Add(datetime::Duration(10000));
+    AuthTokens at = {{"a", {"a", future}}, {"b", {"b", future}}, {"c", {"c", future}}};
     err = ud.SetAuthTokens(at, true, want);
     auto got = ud.GetAccountUsername();
     ASSERT_EQ(got, want);
 
     // With tracker tokens -- so no username
     want = "";
-    at = {{"a", "a"}, {"b", "b"}, {"c", "c"}};
+    at = {{"a", {"a"}}, {"b", {"b"}}, {"c", {"c"}}};
     err = ud.SetAuthTokens(at, true, want);
     got = ud.GetAccountUsername();
     ASSERT_EQ(got, want);
