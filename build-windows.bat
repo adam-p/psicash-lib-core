@@ -32,3 +32,6 @@ REM TODO: put exported include files into an "include" directory and modify buil
 robocopy /V . dist-windows datetime.hpp error.hpp url.hpp psicash.hpp
 robocopy /V vendor\ dist-windows\vendor /S
 git describe --always --long --dirty --tags > dist-windows/git.txt
+
+del /F /S /Q build 1>nul
+rmdir /S /Q build

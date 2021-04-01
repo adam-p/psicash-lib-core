@@ -170,26 +170,58 @@ Error PsiCash::SetRequestMetadataItem(const string& key, const string& value) {
 // Stored info accessors
 //
 
-bool PsiCash::HasTokens() const {
+/// This protected helper method is a hack. `HasTokens()` is the best place to do a local
+/// token-expiry check and possibly call `user_data_->DeleteUserData()`, but then it can't
+/// be a `const` method. But we have other const methods that need to check `HasTokens()`.
+/// So this method encapsulates most of the logic of `HasTokens()` and can be called by
+/// other methods.
+bool PsiCash::HasTokensConst() const {
     MUST_BE_INITIALIZED;
 
     // Trackers and Accounts both require the same token types (for now).
-    // (Accounts will also have the "logout" type, but it isn't strictly needed for sane operation.)
+    // (Accounts also have the "logout" type, but it isn't strictly needed for sane operation.)
     vector<string> required_token_types = {kEarnerTokenType, kSpenderTokenType, kIndicatorTokenType};
+
+    auto local_now = datetime::DateTime::Now();
+
     auto auth_tokens = user_data_->GetAuthTokens();
     for (const auto& it : auth_tokens) {
         auto found = std::find(required_token_types.begin(), required_token_types.end(), it.first);
         if (found != required_token_types.end()) {
             required_token_types.erase(found);
         }
+
+        // If any tokens are expired, we consider ourselves to not have a proper set
+        if (it.second.server_time_expiry
+            && user_data_->ServerTimeToLocal(*it.second.server_time_expiry) < local_now) {
+            return false;
+        }
     }
 
     return required_token_types.empty();
 }
 
+
+bool PsiCash::HasTokens() {
+    MUST_BE_INITIALIZED;
+
+    if (!HasTokensConst()) {
+        if (!user_data_->GetAuthTokens().empty()) {
+            // We don't have valid tokens, but we still have stored tokens, so we need to
+            // do a local logoout. We're ignoring the return value, because there's
+            // nothing we can do with it. If the datastore update fails, we'll just have
+            // to try it again next time.
+            (void)user_data_->DeleteUserData(IsAccount());
+        }
+        return false;
+    }
+
+    return true;
+}
+
 /// If the user has no tokens, most actions are disallowed. (This can include being in
 /// the is-logged-out-account state.)
-#define TOKENS_REQUIRED     if (!HasTokens()) { return MakeCriticalError("user has insufficient tokens"); }
+#define TOKENS_REQUIRED     if (!HasTokensConst()) { return MakeCriticalError("user has insufficient tokens"); }
 
 bool PsiCash::IsAccount() const {
     if (user_data_->GetIsLoggedOutAccount()) {
@@ -848,7 +880,7 @@ Result<PsiCash::RefreshStateResponse> PsiCash::RefreshState(
             }
 
             // If the account tokens just expired, then we need to go into a logged-out state.
-            if (IsAccount() && !HasTokens()) {
+            if (IsAccount() && !HasTokensConst()) {
                 // If we're transitioning to a logged out state and there are active
                 // authorizations (applied to the current tunnel), then we need to
                 // reconnect to remove them.
@@ -871,7 +903,7 @@ Result<PsiCash::RefreshStateResponse> PsiCash::RefreshState(
             return PsiCash::RefreshStateResponse{ Status::Success, reconnect_required };
         }
 
-        if (HasTokens()) {
+        if (HasTokensConst()) {
             // We have a good tracker state.
             return PsiCash::RefreshStateResponse{ Status::Success, reconnect_required };
         }
@@ -1078,7 +1110,7 @@ error::Result<PsiCash::AccountLoginResponse> PsiCash::AccountLogin(
 
     // If we have tracker tokens, include them to (attempt to) merge the balance.
     string old_tokens;
-    if (!IsAccount() && HasTokens()) {
+    if (!IsAccount() && HasTokensConst()) {
         old_tokens = CommaDelimitTokens({});
     }
 

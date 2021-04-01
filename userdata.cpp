@@ -145,11 +145,11 @@ error::Error UserData::Clear() {
     return PassError(datastore_.Reset(FreshDatastore()));
 }
 
-error::Error UserData::DeleteUserData(bool isLoggedOutAccout) {
+error::Error UserData::DeleteUserData(bool isLoggedOutAccount) {
     WritePauser pauser(*this);
     // Not checking return values, since writing is paused.
     (void)datastore_.Set(kUserPtr, json::object());
-    (void)SetIsLoggedOutAccount(isLoggedOutAccout);
+    (void)SetIsLoggedOutAccount(isLoggedOutAccount);
     return PassError(pauser.Commit());
 }
 
@@ -186,6 +186,14 @@ error::Error UserData::SetServerTimeDiff(const datetime::DateTime& serverTimeNow
     auto localTimeNow = datetime::DateTime::Now();
     auto diff = serverTimeNow.Diff(localTimeNow);
     return PassError(datastore_.Set(kServerTimeDiffPtr, datetime::DurationToInt64(diff)));
+}
+
+datetime::DateTime UserData::ServerTimeToLocal(const datetime::DateTime& server_time) const {
+    // server_time_diff is server-minus-local. So it's positive if server is ahead, negative if behind.
+    // So we have to subtract the diff from the server time to get the local time.
+    // Δ = s - l
+    // l = s - Δ
+    return server_time.Sub(GetServerTimeDiff());
 }
 
 /* There are two JSON formats that we might receive for tokens, and we'll handle them both.
@@ -243,25 +251,7 @@ AuthTokens UserData::GetAuthTokens() const {
     if (!v) {
         return AuthTokens();
     }
-
-    // We only return non-expired tokens. This is the only point where we check token expiry.
-    auto now = datetime::DateTime::Now();
-    AuthTokens valid_auth_tokens;
-    for (const auto& token : *v) {
-        bool not_expired = true;
-        if (token.second.server_time_expiry) {
-            auto local_expiry = token.second.server_time_expiry->Sub(GetServerTimeDiff());
-            if (local_expiry < now) {
-                not_expired = false;
-            }
-        }
-
-        if (not_expired) {
-            valid_auth_tokens[token.first] = token.second;
-        }
-    }
-
-    return valid_auth_tokens;
+    return *v;
 }
 
 error::Error UserData::SetAuthTokens(const AuthTokens& v, bool is_account, const std::string& utf8_username) {
@@ -421,11 +411,7 @@ void UserData::UpdatePurchaseLocalTimeExpiry(Purchase& purchase) const {
         return;
     }
 
-    // server_time_diff is server-minus-local. So it's positive if server is ahead, negative if behind.
-    // So we have to subtract the diff from the server time to get the local time.
-    // Δ = s - l
-    // l = s - Δ
-    purchase.local_time_expiry = purchase.server_time_expiry->Sub(GetServerTimeDiff());
+    purchase.local_time_expiry = ServerTimeToLocal(*purchase.server_time_expiry);
 }
 
 void UserData::UpdatePurchasesLocalTimeExpiry(Purchases& purchases) const {

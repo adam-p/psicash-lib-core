@@ -83,8 +83,8 @@ public:
     };
 
 public:
-    /// Deletes the stored user data and sets the isLoggedOutAccout flag.
-    error::Error DeleteUserData(bool isLoggedOutAccout);
+    /// Deletes the stored user data and sets the isLoggedOutAccount flag.
+    error::Error DeleteUserData(bool isLoggedOutAccount);
 
     std::string GetInstanceID() const;
 
@@ -93,6 +93,8 @@ public:
 
     datetime::Duration GetServerTimeDiff() const;
     error::Error SetServerTimeDiff(const datetime::DateTime& serverTimeNow);
+    /// Converts `server_time` to local time using the current diff
+    datetime::DateTime ServerTimeToLocal(const datetime::DateTime& server_time) const;
     /// Modifies the argument purchase.
     void UpdatePurchaseLocalTimeExpiry(Purchase& purchase) const;
 

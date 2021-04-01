@@ -77,7 +77,8 @@ TEST_F(TestUserData, Persistence)
     auto want_server_time_diff_ms = 54321;
     auto want_server_time_diff = datetime::Duration(want_server_time_diff_ms);
     auto future = datetime::DateTime::Now().Add(datetime::Duration(want_server_time_diff_ms*2)); // if this is less than want_server_time_diff_ms, the tokens will be expired already
-    AuthTokens want_auth_tokens = {{"k1", {"v1", nullopt}}, {"k2", {"v2", future}}, {"k3", {"v3", future}}};
+    auto past = datetime::DateTime::Now().Sub(datetime::Duration(want_server_time_diff_ms*2));
+    AuthTokens want_auth_tokens = {{"k1", {"v1", nullopt}}, {"k2", {"v2", future}}, {"k3", {"v3", past}}};
     bool want_is_account = true;
     string want_account_username = "account-username"s;
     int64_t want_balance = 12345;
@@ -272,8 +273,7 @@ TEST_F(TestUserData, AuthTokens)
     auto past = datetime::DateTime::Now().Sub(datetime::Duration(10000));
     auto future = datetime::DateTime::Now().Add(datetime::Duration(10000));
 
-    // All tokens in the future
-    AuthTokens want = {{"k1", {"v1", future}}, {"k2", {"v2", future}}};
+    AuthTokens want = {{"k1", {"v1", future}}, {"k2", {"v2", past}}};
     err = ud.SetAuthTokens(want, false, "");
     ASSERT_FALSE(err);
     auto got_tokens = ud.GetAuthTokens();
@@ -290,13 +290,6 @@ TEST_F(TestUserData, AuthTokens)
     is_account = ud.GetIsAccount();
     ASSERT_EQ(is_account, true);
     ASSERT_EQ(ud.GetAccountUsername(), "tokens-username");
-
-    // One token in the past
-    want = {{"k1", {"v1", past}}, {"k2", {"v2", future}}};
-    err = ud.SetAuthTokens(want, false, "");
-    ASSERT_FALSE(err);
-    got_tokens = ud.GetAuthTokens();
-    ASSERT_EQ(want.size()-1, got_tokens.size()); // should hae got one less token back
 
     // CullAuthTokens
     err = ud.SetAuthTokens({{"k1",{"v1"}},{"k2",{"v2"}},{"k3",{"v3"}},{"k4",{"v4"}},}, false, "");
