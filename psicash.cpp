@@ -166,6 +166,11 @@ Error PsiCash::SetRequestMetadataItem(const string& key, const string& value) {
     return PassError(user_data_->SetRequestMetadataItem(key, value));
 }
 
+Error PsiCash::SetLocale(const string& locale) {
+    MUST_BE_INITIALIZED;
+    return PassError(user_data_->SetLocale(locale));
+}
+
 //
 // Stored info accessors
 //
@@ -454,6 +459,7 @@ std::string PsiCash::GetUserSiteURL(UserSiteURLType url_type, bool webview) cons
     }
 
     url.query_ = "utm_source=" + user_agent_;
+    url.query_ += "&locale=" + user_data_->GetLocale();
 
     if (webview) {
         url.query_ += "&webview=true";

@@ -1,4 +1,5 @@
 #include "gtest/gtest.h"
+#include "gmock/gmock.h"
 #include "test_helpers.hpp"
 #include "userdata.hpp"
 #include "vendor/nlohmann/json.hpp"
@@ -7,6 +8,7 @@ using json = nlohmann::json;
 using namespace std;
 using namespace nonstd;
 using namespace psicash;
+using namespace testing;
 
 constexpr auto dev = true;
 
@@ -540,4 +542,24 @@ TEST_F(TestUserData, Metadata)
     ASSERT_FALSE(err);
     v = ud.GetRequestMetadata();
     ASSERT_TRUE(v["k"].is_null());
+}
+
+TEST_F(TestUserData, Locale)
+{
+    UserData ud;
+    auto err = ud.Init(GetTempDir().c_str(), dev);
+    ASSERT_FALSE(err);
+
+    auto v = ud.GetLocale();
+    ASSERT_THAT(v, IsEmpty());
+
+    err = ud.SetLocale("en-US");
+    ASSERT_FALSE(err);
+    v = ud.GetLocale();
+    ASSERT_EQ(v, "en-US");
+
+    err = ud.SetLocale("");
+    ASSERT_FALSE(err);
+    v = ud.GetLocale();
+    ASSERT_EQ(v, "");
 }

@@ -340,6 +340,21 @@ TEST_F(TestPsiCash, SetRequestMetadataItem) {
     ASSERT_EQ(j["k"], "v");
 }
 
+TEST_F(TestPsiCash, SetLocale) {
+    PsiCashTester pc;
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false);
+    ASSERT_FALSE(err);
+
+    auto url = pc.GetUserSiteURL(PsiCash::UserSiteURLType::AccountSignup, false);
+    ASSERT_THAT(url, EndsWith("locale="));
+
+    err = pc.SetLocale("en-US");
+    ASSERT_FALSE(err);
+
+    url = pc.GetUserSiteURL(PsiCash::UserSiteURLType::AccountSignup, false);
+    ASSERT_THAT(url, HasSubstr("locale=en-US"));
+}
+
 TEST_F(TestPsiCash, IsAccount) {
     PsiCashTester pc;
     auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false);
@@ -1039,27 +1054,34 @@ TEST_F(TestPsiCash, GetUserSiteURL) {
     for (bool test : {false, true}) {
         for (PsiCash::UserSiteURLType url_type : {PsiCash::UserSiteURLType::AccountSignup, PsiCash::UserSiteURLType::ForgotAccount, PsiCash::UserSiteURLType::AccountManagement}) {
             for (bool webview : {false, true}) {
-                PsiCashTester pc;
-                auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false, test);
-                ASSERT_FALSE(err);
+                for (string locale : {"", "en-US", "zh"}) {
+                    PsiCashTester pc;
+                    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false, test);
+                    ASSERT_FALSE(err);
 
-                auto url = pc.GetUserSiteURL(url_type, webview);
+                    err = pc.SetLocale(locale);
+                    ASSERT_FALSE(err);
 
-                ASSERT_NE(url.find("https://"), string::npos);
-                ASSERT_NE(url.find(TestPsiCash::UserAgent()), string::npos) << url;
+                    auto url = pc.GetUserSiteURL(url_type, webview);
 
-                if (test) {
-                    ASSERT_NE(url.find("dev-"), string::npos);
-                }
-                else {
-                    ASSERT_EQ(url.find("dev-"), string::npos);
-                }
+                    ASSERT_THAT(url, StartsWith("https://"));
+                    ASSERT_THAT(url, HasSubstr(TestPsiCash::UserAgent()));
 
-                if (webview) {
-                    ASSERT_NE(url.find("webview"), string::npos);
-                }
-                else {
-                    ASSERT_EQ(url.find("webview"), string::npos);
+                    if (test) {
+                        ASSERT_THAT(url, HasSubstr("dev-"));
+                    }
+                    else {
+                        ASSERT_THAT(url, Not(HasSubstr("dev-")));
+                    }
+
+                    if (webview) {
+                        ASSERT_THAT(url, HasSubstr("webview"));
+                    }
+                    else {
+                        ASSERT_THAT(url, Not(HasSubstr("webview")));
+                    }
+
+                    ASSERT_THAT(url, HasSubstr("locale="+locale));
                 }
             }
         }

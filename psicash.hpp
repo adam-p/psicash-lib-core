@@ -194,6 +194,9 @@ public:
     /// client_version, client_region, sponsor_id, and propagation_channel_id.
     error::Error SetRequestMetadataItem(const std::string& key, const std::string& value);
 
+    /// Set current UI locale.
+    error::Error SetLocale(const std::string& locale);
+
     //
     // Stored info accessors
     //
