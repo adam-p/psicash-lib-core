@@ -292,16 +292,55 @@ TEST_F(TestUserData, AuthTokens)
     is_account = ud.GetIsAccount();
     ASSERT_EQ(is_account, true);
     ASSERT_EQ(ud.GetAccountUsername(), "tokens-username");
+}
 
-    // CullAuthTokens
-    err = ud.SetAuthTokens({{"k1",{"v1"}},{"k2",{"v2"}},{"k3",{"v3"}},{"k4",{"v4"}},}, false, "");
+TEST_F(TestUserData, CullAuthTokens)
+{
+    UserData ud;
+    auto err = ud.Init(GetTempDir().c_str(), dev);
     ASSERT_FALSE(err);
-    std::map<std::string, bool> valid_tokens = {{"v1",true},{"v2",false},{"v3",true}};
-    want = {{"k1",{"v1"}},{"k3",{"v3"}}};
+
+    AuthTokens auth_tokens = {{"k1",{"v1"}},{"k2",{"v2"}},{"k3",{"v3"}},{"k4",{"v4"}},};
+
+    // All good
+    err = ud.SetAuthTokens(auth_tokens, false, "");
+    ASSERT_FALSE(err);
+    std::map<std::string, bool> valid_tokens = {{"v1",true},{"v2",true},{"v3",true},{"v4",true}};
     err = ud.CullAuthTokens(valid_tokens);
     ASSERT_FALSE(err);
-    got_tokens = ud.GetAuthTokens();
-    ASSERT_TRUE(AuthTokenSetsEqual(want, got_tokens));
+    ASSERT_TRUE(AuthTokenSetsEqual(auth_tokens, ud.GetAuthTokens()));
+
+    // All present, one invalid
+    err = ud.SetAuthTokens(auth_tokens, false, "");
+    ASSERT_FALSE(err);
+    valid_tokens = {{"v1",true},{"v2",false},{"v3",true},{"v4",true}};
+    err = ud.CullAuthTokens(valid_tokens);
+    ASSERT_FALSE(err);
+    ASSERT_THAT(ud.GetAuthTokens(), IsEmpty());
+
+    // All present, all invalid
+    err = ud.SetAuthTokens(auth_tokens, false, "");
+    ASSERT_FALSE(err);
+    valid_tokens = {{"v1",false},{"v2",false},{"v3",false},{"v4",false}};
+    err = ud.CullAuthTokens(valid_tokens);
+    ASSERT_FALSE(err);
+    ASSERT_THAT(ud.GetAuthTokens(), IsEmpty());
+
+    // All valid, one missing
+    err = ud.SetAuthTokens(auth_tokens, false, "");
+    ASSERT_FALSE(err);
+    valid_tokens = {{"v1",true},{"v3",true},{"v4",true}};
+    err = ud.CullAuthTokens(valid_tokens);
+    ASSERT_FALSE(err);
+    ASSERT_THAT(ud.GetAuthTokens(), IsEmpty());
+
+    // All missing
+    err = ud.SetAuthTokens(auth_tokens, false, "");
+    ASSERT_FALSE(err);
+    valid_tokens = {};
+    err = ud.CullAuthTokens(valid_tokens);
+    ASSERT_FALSE(err);
+    ASSERT_THAT(ud.GetAuthTokens(), IsEmpty());
 }
 
 TEST_F(TestUserData, ValidTokenTypes) {

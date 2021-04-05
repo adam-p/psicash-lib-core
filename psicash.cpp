@@ -175,58 +175,26 @@ Error PsiCash::SetLocale(const string& locale) {
 // Stored info accessors
 //
 
-/// This protected helper method is a hack. `HasTokens()` is the best place to do a local
-/// token-expiry check and possibly call `user_data_->DeleteUserData()`, but then it can't
-/// be a `const` method. But we have other const methods that need to check `HasTokens()`.
-/// So this method encapsulates most of the logic of `HasTokens()` and can be called by
-/// other methods.
-bool PsiCash::HasTokensConst() const {
+bool PsiCash::HasTokens() const {
     MUST_BE_INITIALIZED;
 
     // Trackers and Accounts both require the same token types (for now).
-    // (Accounts also have the "logout" type, but it isn't strictly needed for sane operation.)
+    // (Accounts will also have the "logout" type, but it isn't strictly needed for sane operation.)
     vector<string> required_token_types = {kEarnerTokenType, kSpenderTokenType, kIndicatorTokenType};
-
-    auto local_now = datetime::DateTime::Now();
-
     auto auth_tokens = user_data_->GetAuthTokens();
     for (const auto& it : auth_tokens) {
         auto found = std::find(required_token_types.begin(), required_token_types.end(), it.first);
         if (found != required_token_types.end()) {
             required_token_types.erase(found);
         }
-
-        // If any tokens are expired, we consider ourselves to not have a proper set
-        if (it.second.server_time_expiry
-            && user_data_->ServerTimeToLocal(*it.second.server_time_expiry) < local_now) {
-            return false;
-        }
     }
 
     return required_token_types.empty();
 }
 
-
-bool PsiCash::HasTokens() {
-    MUST_BE_INITIALIZED;
-
-    if (!HasTokensConst()) {
-        if (!user_data_->GetAuthTokens().empty()) {
-            // We don't have valid tokens, but we still have stored tokens, so we need to
-            // do a local logoout. We're ignoring the return value, because there's
-            // nothing we can do with it. If the datastore update fails, we'll just have
-            // to try it again next time.
-            (void)user_data_->DeleteUserData(IsAccount());
-        }
-        return false;
-    }
-
-    return true;
-}
-
 /// If the user has no tokens, most actions are disallowed. (This can include being in
 /// the is-logged-out-account state.)
-#define TOKENS_REQUIRED     if (!HasTokensConst()) { return MakeCriticalError("user has insufficient tokens"); }
+#define TOKENS_REQUIRED     if (!HasTokens()) { return MakeCriticalError("user has insufficient tokens"); }
 
 bool PsiCash::IsAccount() const {
     if (user_data_->GetIsLoggedOutAccount()) {
@@ -739,7 +707,38 @@ Result<Status> PsiCash::NewTracker() {
             result->body, "; ", json(result->headers).dump()));
 }
 
-Result<PsiCash::RefreshStateResponse> PsiCash::RefreshState(const std::vector<std::string>& purchase_classes) {
+Result<PsiCash::RefreshStateResponse> PsiCash::RefreshState(bool local_only, const std::vector<std::string>& purchase_classes) {
+    if (local_only) {
+        // Our "local only" refresh involves checking tokens for expiry and potentially
+        // shifting into a logged-out state.
+
+        // This call is offline, but we might be currently connected, so the reconnect_required
+        // considerations still apply.
+        bool reconnect_required = false;
+
+        auto local_now = datetime::DateTime::Now();
+        for (const auto& it : user_data_->GetAuthTokens()) {
+            if (it.second.server_time_expiry
+                && user_data_->ServerTimeToLocal(*it.second.server_time_expiry) < local_now) {
+                    // If any tokens are expired, we consider ourselves to not have a proper set
+
+                    // If we're transitioning to a logged out state and there are active
+                    // authorizations (applied to the current tunnel), then we need to
+                    // reconnect to remove them.
+                    // TODO: this line/logic is duplicated below; consider a helper to encapsulate
+                    reconnect_required = !GetAuthorizations(true).empty();
+
+                    if (auto err = user_data_->DeleteUserData(IsAccount())) {
+                        return WrapError(err, "DeleteUserData failed");
+                    }
+
+                    break;
+            }
+        }
+
+        return PsiCash::RefreshStateResponse{ Status::Success, reconnect_required };
+    }
+
     return RefreshState(purchase_classes, true);
 }
 
@@ -831,11 +830,18 @@ Result<PsiCash::RefreshStateResponse> PsiCash::RefreshState(
             auto j = json::parse(result->body);
 
             auto valid_token_types = j["TokensValid"].get<map<string, bool>>();
-            user_data_->CullAuthTokens(valid_token_types);
+            (void)user_data_->CullAuthTokens(valid_token_types);
 
             // If any of our tokens were valid, then the IsAccount value from the
             // server is authoritative. Otherwise we'll respect our existing value.
-            if (!valid_token_types.empty() && j["IsAccount"].is_boolean()) {
+            bool any_valid_token = false;
+            for (const auto& vtt : valid_token_types) {
+                if (vtt.second) {
+                    any_valid_token = true;
+                    break;
+                }
+            }
+            if (any_valid_token && j["IsAccount"].is_boolean()) {
                 // If we have moved from being an account to not being an account,
                 // something is very wrong.
                 auto prev_is_account = IsAccount();
@@ -844,11 +850,11 @@ Result<PsiCash::RefreshStateResponse> PsiCash::RefreshState(
                     return MakeCriticalError("invalid is-account state");
                 }
 
-                user_data_->SetIsAccount(is_account);
+                (void)user_data_->SetIsAccount(is_account);
             }
 
             if (j["Balance"].is_number_integer()) {
-                user_data_->SetBalance(j["Balance"].get<int64_t>());
+                (void)user_data_->SetBalance(j["Balance"].get<int64_t>());
             }
 
             // We only try to use the PurchasePrices if we supplied purchase classes to the request
@@ -868,7 +874,7 @@ Result<PsiCash::RefreshStateResponse> PsiCash::RefreshState(
                     });
                 }
 
-                user_data_->SetPurchasePrices(purchase_prices);
+                (void)user_data_->SetPurchasePrices(purchase_prices);
             }
 
             if (j["Purchases"].is_array()) {
@@ -881,18 +887,18 @@ Result<PsiCash::RefreshStateResponse> PsiCash::RefreshState(
                     // Authorizations are applied to tunnel connections, which requires a reconnect
                     reconnect_required = reconnect_required || purchase_res->authorization;
 
-                    user_data_->AddPurchase(*purchase_res);
+                    (void)user_data_->AddPurchase(*purchase_res);
                 }
             }
 
             // If the account tokens just expired, then we need to go into a logged-out state.
-            if (IsAccount() && !HasTokensConst()) {
+            if (IsAccount() && !HasTokens()) {
                 // If we're transitioning to a logged out state and there are active
                 // authorizations (applied to the current tunnel), then we need to
                 // reconnect to remove them.
                 reconnect_required = reconnect_required || !GetAuthorizations(true).empty();
 
-                user_data_->DeleteUserData(true);
+                (void)user_data_->DeleteUserData(true);
             }
 
             if (auto err = pauser.Commit()) {
@@ -909,13 +915,14 @@ Result<PsiCash::RefreshStateResponse> PsiCash::RefreshState(
             return PsiCash::RefreshStateResponse{ Status::Success, reconnect_required };
         }
 
-        if (HasTokensConst()) {
+        if (HasTokens()) {
             // We have a good tracker state.
             return PsiCash::RefreshStateResponse{ Status::Success, reconnect_required };
         }
 
         // We started out with tracker tokens, but they're all invalid.
-        // Note that this shouldn't happen -- we "know" that Tracker tokens don't expire.
+        // Note that this shouldn't happen -- we "know" that Tracker tokens don't
+        // expire -- but we'll still try to recover if we haven't already recursed.
 
         if (!allow_recursion) {
             return MakeCriticalError("failed to obtain valid tracker tokens (b)");
@@ -1116,7 +1123,7 @@ error::Result<PsiCash::AccountLoginResponse> PsiCash::AccountLogin(
 
     // If we have tracker tokens, include them to (attempt to) merge the balance.
     string old_tokens;
-    if (!IsAccount() && HasTokensConst()) {
+    if (!IsAccount() && HasTokens()) {
         old_tokens = CommaDelimitTokens({});
     }
 

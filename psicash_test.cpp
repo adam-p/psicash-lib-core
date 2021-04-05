@@ -245,7 +245,7 @@ TEST_F(TestPsiCash, UninitializedBehaviour) {
 
         ASSERT_EQ(pc.Balance(), 0);
 
-        auto res = pc.RefreshState({"speed-boost"});
+        auto res = pc.RefreshState(false, {"speed-boost"});
         ASSERT_FALSE(res);
     }
     {
@@ -259,7 +259,7 @@ TEST_F(TestPsiCash, UninitializedBehaviour) {
 
         ASSERT_EQ(pc.Balance(), 0);
 
-        auto res = pc.RefreshState({"speed-boost"});
+        auto res = pc.RefreshState(false, {"speed-boost"});
         ASSERT_FALSE(res);
     }
 }
@@ -288,7 +288,7 @@ TEST_F(TestPsiCash, MigrateTrackerTokens) {
 
         ASSERT_FALSE(pc.HasTokens());
 
-        auto res = pc.RefreshState({"speed-boost"});
+        auto res = pc.RefreshState(false, {"speed-boost"});
         ASSERT_TRUE(res) << res.error();
         ASSERT_EQ(res->status, Status::Success) << (int)res->status;
         ASSERT_FALSE(pc.IsAccount());
@@ -410,8 +410,7 @@ TEST_F(TestPsiCash, HasTokens) {
         auto past = datetime::DateTime::Now().Sub(datetime::Duration(10000));
         at = {{"indicator", {"a", past}}, {"spender", {"b", future}}, {"earner", {"c", future}}, {"logout", {"c", future}}};
         err = pc.user_data().SetAuthTokens(at, true, "username");
-        // A full set is required for validity
-        ASSERT_FALSE(pc.HasTokens());
+        ASSERT_TRUE(pc.HasTokens());
     }
     {
         PsiCashTester pc;
@@ -419,7 +418,7 @@ TEST_F(TestPsiCash, HasTokens) {
         ASSERT_FALSE(err);
         ASSERT_FALSE(pc.HasTokens());
 
-        auto res = pc.RefreshState({"speed-boost"});
+        auto res = pc.RefreshState(false, {"speed-boost"});
         ASSERT_TRUE(res) << res.error();
         ASSERT_EQ(res->status, Status::Success) << (int)res->status;
         ASSERT_TRUE(pc.HasTokens());
@@ -1193,12 +1192,10 @@ TEST_F(TestPsiCash, RefreshState) {
     PsiCashTester pc;
     auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
     ASSERT_FALSE(err) << err;
-
-    pc.user_data().Clear();
     ASSERT_FALSE(pc.HasTokens());
 
     // Basic NewTracker success
-    auto res = pc.RefreshState({"speed-boost"});
+    auto res = pc.RefreshState(false, {"speed-boost"});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success) << (int)res->status;
     ASSERT_FALSE(res->reconnect_required);
@@ -1210,7 +1207,7 @@ TEST_F(TestPsiCash, RefreshState) {
 
     // Test with existing tracker
     auto want_tokens = pc.user_data().GetAuthTokens();
-    res = pc.RefreshState({"speed-boost"});
+    res = pc.RefreshState(false, {"speed-boost"});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     ASSERT_FALSE(res->reconnect_required);
@@ -1224,7 +1221,7 @@ TEST_F(TestPsiCash, RefreshState) {
 
     // Multiple purchase classes
     pc.user_data().Clear();
-    res = pc.RefreshState({"speed-boost", TEST_DEBIT_TRANSACTION_CLASS});
+    res = pc.RefreshState(false, {"speed-boost", TEST_DEBIT_TRANSACTION_CLASS});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     ASSERT_FALSE(res->reconnect_required);
@@ -1236,7 +1233,7 @@ TEST_F(TestPsiCash, RefreshState) {
 
     // No purchase classes
     pc.user_data().Clear();
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     ASSERT_FALSE(res->reconnect_required);
@@ -1248,27 +1245,27 @@ TEST_F(TestPsiCash, RefreshState) {
 
     // Purchase classes, then none; verify that previous aren't lost
     pc.user_data().Clear();
-    res = pc.RefreshState({"speed-boost"}); // with class
+    res = pc.RefreshState(false, {"speed-boost"}); // with class
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     ASSERT_FALSE(res->reconnect_required);
     speed_boost_purchase_prices = pc.GetPurchasePrices();
     ASSERT_GT(speed_boost_purchase_prices.size(), 3);
-    res = pc.RefreshState({}); // without class
+    res = pc.RefreshState(false, {}); // without class
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     ASSERT_EQ(pc.GetPurchasePrices().size(), speed_boost_purchase_prices.size());
 
     // Balance increase
     pc.user_data().Clear();
-    res = pc.RefreshState({"speed-boost"}); // with class
+    res = pc.RefreshState(false, {"speed-boost"}); // with class
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     ASSERT_FALSE(res->reconnect_required);
     auto starting_balance = pc.Balance();
     err = MAKE_1T_REWARD(pc, 1);
     ASSERT_FALSE(err) << err;
-    res = pc.RefreshState({"speed-boost"}); // with class
+    res = pc.RefreshState(false, {"speed-boost"}); // with class
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     ASSERT_EQ(pc.Balance(), starting_balance + ONE_TRILLION);
@@ -1283,19 +1280,19 @@ TEST_F(TestPsiCash, RefreshStateAccount) {
     // after the request to the server sees an illegal is-account state. It should
     // result in a local data reset.
     pc.user_data().Clear();
-    auto res_refresh = pc.RefreshState({"speed-boost"});
+    auto res_refresh = pc.RefreshState(false, {"speed-boost"});
     ASSERT_TRUE(res_refresh) << res_refresh.error();
     ASSERT_EQ(res_refresh->status, Status::Success);
     ASSERT_FALSE(res_refresh->reconnect_required);
     // We're setting "isAccount" with tracker tokens. This is not okay and shouldn't happen.
     pc.user_data().SetIsAccount(true);
-    res_refresh = pc.RefreshState({});
+    res_refresh = pc.RefreshState(false, {});
     ASSERT_FALSE(res_refresh);
 
     // Test is-account with no tokens
     pc.user_data().Clear();                 // blow away existing tokens
     pc.user_data().SetIsAccount(true);      // force is-account
-    res_refresh = pc.RefreshState({"speed-boost"});
+    res_refresh = pc.RefreshState(false, {"speed-boost"});
     ASSERT_TRUE(res_refresh) << res_refresh.error();
     ASSERT_EQ(res_refresh->status, Status::Success);
     ASSERT_FALSE(res_refresh->reconnect_required);
@@ -1310,7 +1307,7 @@ TEST_F(TestPsiCash, RefreshStateAccount) {
     ASSERT_EQ(res_login->status, Status::Success);
     ASSERT_FALSE(res_login->last_tracker_merge);
 
-    res_refresh = pc.RefreshState({"speed-boost"});
+    res_refresh = pc.RefreshState(false, {"speed-boost"});
     ASSERT_TRUE(res_refresh) << res_refresh.error();
     ASSERT_EQ(res_refresh->status, Status::Success);
     ASSERT_FALSE(res_refresh->reconnect_required);
@@ -1326,7 +1323,7 @@ TEST_F(TestPsiCash, RefreshStateAccount) {
     ASSERT_TRUE(res_logout);
     ASSERT_TRUE(pc.IsAccount());               // should still be is-account
     ASSERT_FALSE(pc.HasTokens());
-    res_refresh = pc.RefreshState({"speed-boost"});
+    res_refresh = pc.RefreshState(false, {"speed-boost"});
     ASSERT_TRUE(res_refresh) << res_refresh.error();
     ASSERT_EQ(res_refresh->status, Status::Success);
     ASSERT_FALSE(res_refresh->reconnect_required);
@@ -1344,7 +1341,7 @@ TEST_F(TestPsiCash, RefreshStateAccount) {
         ASSERT_EQ(res_login->status, Status::Success);
         ASSERT_FALSE(res_login->last_tracker_merge);
 
-        res_refresh = pc.RefreshState({"speed-boost"});
+        res_refresh = pc.RefreshState(false, {"speed-boost"});
         ASSERT_TRUE(res_refresh) << res_refresh.error();
         ASSERT_EQ(res_refresh->status, Status::Success);
         ASSERT_FALSE(res_refresh->reconnect_required);
@@ -1357,7 +1354,7 @@ TEST_F(TestPsiCash, RefreshStateAccount) {
 
         // Try again with invalid tokens
         pc.SetRequestMutators({"InvalidTokens"});
-        res_refresh = pc.RefreshState({"speed-boost"});
+        res_refresh = pc.RefreshState(false, {"speed-boost"});
         ASSERT_TRUE(res_refresh) << res_refresh.error();
         ASSERT_EQ(res_refresh->status, Status::Success);
         ASSERT_FALSE(res_refresh->reconnect_required);
@@ -1380,7 +1377,7 @@ TEST_F(TestPsiCash, RefreshStateAccount) {
         ASSERT_EQ(res_login->status, Status::Success);
         ASSERT_FALSE(res_login->last_tracker_merge);
 
-        res_refresh = pc.RefreshState({});
+        res_refresh = pc.RefreshState(false, {});
         ASSERT_TRUE(res_refresh) << res_refresh.error();
         ASSERT_EQ(res_refresh->status, Status::Success);
         ASSERT_FALSE(res_refresh->reconnect_required);
@@ -1398,7 +1395,7 @@ TEST_F(TestPsiCash, RefreshStateAccount) {
 
         // Force our tokens to be invalid, emulating expiry
         pc.SetRequestMutators({"InvalidTokens"});
-        res_refresh = pc.RefreshState({});
+        res_refresh = pc.RefreshState(false, {});
         ASSERT_TRUE(res_refresh) << res_refresh.error();
         ASSERT_EQ(res_refresh->status, Status::Success);
         ASSERT_TRUE(res_refresh->reconnect_required); // need to remove the Authorization from the tunnel
@@ -1415,7 +1412,7 @@ TEST_F(TestPsiCash, RefreshStateRetrievePurchases) {
     // We'll go through a set of tests twice -- once with a tracker, once with an account
 
     // Get a tracker
-    auto res_refresh = pc.RefreshState({"speed-boost"});
+    auto res_refresh = pc.RefreshState(false, {"speed-boost"});
     ASSERT_TRUE(res_refresh) << res_refresh.error();
     ASSERT_EQ(res_refresh->status, Status::Success);
     ASSERT_FALSE(res_refresh->reconnect_required);
@@ -1450,7 +1447,7 @@ TEST_F(TestPsiCash, RefreshStateRetrievePurchases) {
         ASSERT_EQ(pc.user_data().GetLastTransactionID(), expected_purchases.back().id);
 
         // Refresh
-        res_refresh = pc.RefreshState({"speed-boost"});
+        res_refresh = pc.RefreshState(false, {"speed-boost"});
         ASSERT_TRUE(res_refresh) << res_refresh.error();
         ASSERT_EQ(res_refresh->status, Status::Success);
 
@@ -1460,7 +1457,7 @@ TEST_F(TestPsiCash, RefreshStateRetrievePurchases) {
 
         // Clear the LastTransactionID value and try again
         pc.user_data().SetLastTransactionID("");
-        res_refresh = pc.RefreshState({"speed-boost"});
+        res_refresh = pc.RefreshState(false, {"speed-boost"});
         ASSERT_TRUE(res_refresh) << res_refresh.error();
         ASSERT_EQ(res_refresh->status, Status::Success);
 
@@ -1474,7 +1471,7 @@ TEST_F(TestPsiCash, RefreshStateRetrievePurchases) {
         pc.user_data().SetLastTransactionID("");
         ASSERT_EQ(pc.GetPurchases().size(), 0);
         ASSERT_EQ(pc.user_data().GetLastTransactionID(), ""s);
-        res_refresh = pc.RefreshState({"speed-boost"});
+        res_refresh = pc.RefreshState(false, {"speed-boost"});
         ASSERT_TRUE(res_refresh) << res_refresh.error();
         ASSERT_EQ(res_refresh->status, Status::Success);
 
@@ -1489,7 +1486,7 @@ TEST_F(TestPsiCash, RefreshStateRetrievePurchases) {
         pc.user_data().AddPurchase(expected_purchases[0]);
         ASSERT_EQ(pc.GetPurchases().size(), 1);
         ASSERT_EQ(pc.user_data().GetLastTransactionID(), expected_purchases[0].id);
-        res_refresh = pc.RefreshState({"speed-boost"});
+        res_refresh = pc.RefreshState(false, {"speed-boost"});
         ASSERT_TRUE(res_refresh) << res_refresh.error();
         ASSERT_EQ(res_refresh->status, Status::Success);
 
@@ -1508,7 +1505,7 @@ TEST_F(TestPsiCash, RefreshStateRetrievePurchases) {
         ASSERT_EQ(pc.user_data().GetLastTransactionID(), purchase_result->purchase->id);
 
         // Refresh state, but won't have retrieved anything.
-        res_refresh = pc.RefreshState({"speed-boost"});
+        res_refresh = pc.RefreshState(false, {"speed-boost"});
         ASSERT_TRUE(res_refresh) << res_refresh.error();
         ASSERT_EQ(res_refresh->status, Status::Success);
         ASSERT_FALSE(res_refresh->reconnect_required);
@@ -1518,7 +1515,7 @@ TEST_F(TestPsiCash, RefreshStateRetrievePurchases) {
         pc.user_data().SetLastTransactionID("");
         ASSERT_EQ(pc.GetPurchases().size(), 0);
         ASSERT_EQ(pc.user_data().GetLastTransactionID(), ""s);
-        res_refresh = pc.RefreshState({"speed-boost"});
+        res_refresh = pc.RefreshState(false, {"speed-boost"});
         ASSERT_TRUE(res_refresh) << res_refresh.error();
         ASSERT_EQ(res_refresh->status, Status::Success);
         // Should have got our Speed Boost, so reconnect is required
@@ -1529,7 +1526,7 @@ TEST_F(TestPsiCash, RefreshStateRetrievePurchases) {
             auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
             ASSERT_TRUE(res_login);
             ASSERT_EQ(res_login->status, Status::Success);
-            res_refresh = pc.RefreshState({});
+            res_refresh = pc.RefreshState(false, {});
             ASSERT_TRUE(res_refresh);
             ASSERT_EQ(res_refresh->status, Status::Success);
             ASSERT_TRUE(pc.IsAccount());
@@ -1558,11 +1555,125 @@ TEST_F(TestPsiCash, RefreshStateRetrievePurchases) {
     ASSERT_TRUE(res_login);
     ASSERT_EQ(res_login->status, Status::Success);
     // Retrieve our purchases
-    res_refresh = pc.RefreshState({});
+    res_refresh = pc.RefreshState(false, {});
     ASSERT_TRUE(res_refresh);
     ASSERT_EQ(res_refresh->status, Status::Success);
     ASSERT_TRUE(pc.IsAccount());
     ASSERT_EQ(pc.GetPurchases(), expected_purchases);
+}
+
+TEST_F(TestPsiCash, RefreshStateLocalOnly) {
+    PsiCashTester pc;
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
+    ASSERT_FALSE(err) << err;
+    ASSERT_FALSE(pc.HasTokens());
+
+    const bool REMOTE = false, LOCAL_ONLY = true;
+
+    auto expire_tokens_fn = [&] {
+        auto past = datetime::DateTime::Now().Sub(datetime::Duration(10000));
+        auto auth_tokens = pc.user_data().GetAuthTokens();
+        for (auto& at : auth_tokens) {
+            at.second.server_time_expiry = past;
+        }
+        auto err = pc.user_data().SetAuthTokens(auth_tokens, true, *pc.AccountUsername());
+        ASSERT_FALSE(err);
+    };
+
+    // If called local-only before there's any tokens, it does nothing.
+    auto res_refresh = pc.RefreshState(LOCAL_ONLY, {});
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(res_refresh->status, Status::Success);
+    ASSERT_FALSE(res_refresh->reconnect_required);
+    ASSERT_FALSE(pc.HasTokens());
+    ASSERT_FALSE(pc.IsAccount());
+    ASSERT_FALSE(pc.AccountUsername());
+
+    // Basic NewTracker success
+    res_refresh = pc.RefreshState(REMOTE, {"speed-boost"});
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(res_refresh->status, Status::Success) << (int)res_refresh->status;
+    ASSERT_FALSE(res_refresh->reconnect_required);
+    ASSERT_FALSE(pc.IsAccount());
+    ASSERT_FALSE(pc.AccountUsername());
+    ASSERT_TRUE(pc.HasTokens());
+    ASSERT_THAT(pc.Balance(), AllOf(Ge(0), Le(MAX_STARTING_BALANCE)));
+    ASSERT_GE(pc.GetPurchasePrices().size(), 2);
+
+    // Test with tracker
+    res_refresh = pc.RefreshState(LOCAL_ONLY, {});
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(res_refresh->status, Status::Success);
+    ASSERT_FALSE(res_refresh->reconnect_required);
+    ASSERT_FALSE(pc.IsAccount());
+    ASSERT_FALSE(pc.AccountUsername());
+    ASSERT_TRUE(pc.HasTokens());
+    ASSERT_THAT(pc.Balance(), AllOf(Ge(0), Le(MAX_STARTING_BALANCE)));
+    auto speed_boost_purchase_prices = pc.GetPurchasePrices();
+    ASSERT_GE(pc.GetPurchasePrices().size(), 2);
+
+    // Get account tokens, to expire them
+    auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::Success);
+    res_refresh = pc.RefreshState(false, {});
+    ASSERT_TRUE(res_refresh);
+    ASSERT_EQ(res_refresh->status, Status::Success);
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_TRUE(pc.HasTokens());
+    ASSERT_TRUE(pc.AccountUsername());
+    ASSERT_THAT(*pc.AccountUsername(), Not(IsEmpty()));
+    res_refresh = pc.RefreshState(REMOTE, {"speed-boost"});
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(res_refresh->status, Status::Success) << (int)res_refresh->status;
+
+    res_refresh = pc.RefreshState(true, {"speed-boost"}); // local-only
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(res_refresh->status, Status::Success);
+
+    // Force the account tokens to be expired
+    expire_tokens_fn();
+    // Refresh local
+    res_refresh = pc.RefreshState(LOCAL_ONLY, {});
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(res_refresh->status, Status::Success);
+    ASSERT_FALSE(res_refresh->reconnect_required);
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_FALSE(pc.HasTokens());       // should be gone
+    ASSERT_FALSE(pc.AccountUsername()); // should be gone
+
+    // Log in again, get authorization
+    res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::Success);
+    res_refresh = pc.RefreshState(false, {});
+    ASSERT_TRUE(res_refresh);
+    ASSERT_EQ(res_refresh->status, Status::Success);
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_TRUE(pc.HasTokens());
+    ASSERT_TRUE(pc.AccountUsername());
+    ASSERT_THAT(*pc.AccountUsername(), Not(IsEmpty()));
+    res_refresh = pc.RefreshState(REMOTE, {"speed-boost"});
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(res_refresh->status, Status::Success) << (int)res_refresh->status;
+    // Get some credit
+    err = MAKE_1T_REWARD(pc, 1);
+    ASSERT_FALSE(err) << err;
+    // Buy something that gives an authorization
+    auto purchase_result = pc.NewExpiringPurchase(TEST_DEBIT_WITH_AUTHORIZATION_TRANSACTION_CLASS, TEST_ONE_TRILLION_ONE_MINUTE_DISTINGUISHER, ONE_TRILLION);
+    ASSERT_TRUE(purchase_result);
+    ASSERT_EQ(purchase_result->status, Status::Success);
+    ASSERT_TRUE(purchase_result->purchase->authorization);
+    // Force tokens to be expired
+    expire_tokens_fn();
+    // Refresh local
+    res_refresh = pc.RefreshState(LOCAL_ONLY, {});
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(res_refresh->status, Status::Success);
+    ASSERT_TRUE(res_refresh->reconnect_required); // now true
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_FALSE(pc.HasTokens());       // should be gone
+    ASSERT_FALSE(pc.AccountUsername()); // should be gone
 }
 
 TEST_F(TestPsiCash, RefreshStateMutators) {
@@ -1577,7 +1688,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
 
     // Tracker with invalid tokens
     pc.user_data().Clear();
-    auto res = pc.RefreshState({});
+    auto res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     auto prev_tokens = pc.user_data().GetAuthTokens();
@@ -1587,7 +1698,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     ASSERT_GT(pc.Balance(), 0);
     // We have tokens; force the server to consider them invalid
     pc.SetRequestMutators({"InvalidTokens"});
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     // We should have brand new tokens now.
@@ -1599,7 +1710,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
 
     // Account with invalid tokens
     pc.user_data().Clear();
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     ASSERT_GE(pc.user_data().GetAuthTokens().size(), 3);
@@ -1608,7 +1719,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     pc.user_data().SetIsAccount(true);
     // We have tokens; force the server to consider them invalid
     pc.SetRequestMutators({"InvalidTokens"});
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     // Accounts won't get new tokens by refreshing, so now we should have none
@@ -1616,7 +1727,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
 
     // Tracker with always-invalid tokens (impossible to get valid ones)
     pc.user_data().Clear();
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     ASSERT_GE(pc.user_data().GetAuthTokens().size(), 3);
@@ -1626,7 +1737,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
             "",              // NewTracker
             "InvalidTokens", // RefreshState
     });
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     // Should have failed utterly
     ASSERT_FALSE(res) << static_cast<int>(res->status);
     // Should be no tokens
@@ -1638,7 +1749,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     pc.user_data().Clear();
     // First request is NewTracker, sleep for 11 secs
     pc.SetRequestMutators({"Timeout:11"});
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_FALSE(res) << static_cast<int>(res->status);
     // Should be no tokens
     ASSERT_EQ(pc.user_data().GetAuthTokens().size(), 0);
@@ -1647,14 +1758,14 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     // No server response for RefreshState
     pc.user_data().Clear();
     // Do an initial request to get Tracker tokens
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     auto auth_tokens = pc.user_data().GetAuthTokens();
     ASSERT_GE(auth_tokens.size(), 3);
     // Because we have tokens the first request will be RefreshState; sleep for 11 secs
     pc.SetRequestMutators({"Timeout:11"});
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_FALSE(res) << static_cast<int>(res->status);
     // Tokens should be unchanged
     ASSERT_TRUE(AuthTokenSetsEqual(auth_tokens, pc.user_data().GetAuthTokens()));
@@ -1664,7 +1775,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     pc.user_data().Clear();
     // First request is NewTracker; force an empty response
     pc.SetRequestMutators({"Response:code=200,body=none"});
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_FALSE(res) << static_cast<int>(res->status);
     // Should be no tokens
     ASSERT_EQ(pc.user_data().GetAuthTokens().size(), 0);
@@ -1673,14 +1784,14 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     // Empty server response for RefreshState
     pc.user_data().Clear();
     // Do an initial request to get Tracker tokens
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     auth_tokens = pc.user_data().GetAuthTokens();
     ASSERT_GE(auth_tokens.size(), 3);
     // Because we have tokens the first request will be RefreshState; force an empty response
     pc.SetRequestMutators({"Response:code=200,body=none"});
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_FALSE(res) << static_cast<int>(res->status);
     // Tokens should be unchanged
     ASSERT_TRUE(AuthTokenSetsEqual(auth_tokens, pc.user_data().GetAuthTokens()));
@@ -1690,7 +1801,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     pc.user_data().Clear();
     // First request is NewTracker; force a response with bad JSON
     pc.SetRequestMutators({"BadJSON:200"});
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_FALSE(res) << static_cast<int>(res->status);
     // Should be no tokens
     ASSERT_EQ(pc.user_data().GetAuthTokens().size(), 0);
@@ -1699,14 +1810,14 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     // RefreshState response with bad JSON
     pc.user_data().Clear();
     // Do an initial request to get Tracker tokens
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     auth_tokens = pc.user_data().GetAuthTokens();
     ASSERT_GE(auth_tokens.size(), 3);
     // Because we have tokens the first request will be RefreshState; force a response with bad JSON
     pc.SetRequestMutators({"BadJSON:200"});
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_FALSE(res) << static_cast<int>(res->status);
     // Tokens should be unchanged
     ASSERT_TRUE(AuthTokenSetsEqual(auth_tokens, pc.user_data().GetAuthTokens()));
@@ -1716,7 +1827,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     pc.user_data().Clear();
     // First request is NewTracker;
     pc.SetRequestMutators({"Response:code=500"});
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success) << static_cast<int>(res->status);
     ASSERT_GE(pc.user_data().GetAuthTokens().size(), 3);
@@ -1726,7 +1837,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     pc.user_data().Clear();
     // First request is NewTracker
     pc.SetRequestMutators({"Response:code=500", "Response:code=500"});
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success) << static_cast<int>(res->status);
     ASSERT_GE(pc.user_data().GetAuthTokens().size(), 3);
@@ -1736,7 +1847,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     pc.user_data().Clear();
     // First request is NewTracker
     pc.SetRequestMutators({"Response:code=500", "Response:code=500", "Response:code=500"});
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::ServerError) << static_cast<int>(res->status);
     // Should be no tokens
@@ -1747,14 +1858,14 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     // Blow away any existing tokens to force internal NewTracker.
     pc.user_data().Clear();
     // Do an initial request to get Tracker tokens
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     auth_tokens = pc.user_data().GetAuthTokens();
     ASSERT_GE(auth_tokens.size(), 3);
     // Because we have tokens the first request will be RefreshState
     pc.SetRequestMutators({"Response:code=500"});
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success) << static_cast<int>(res->status);
     ASSERT_GE(pc.user_data().GetAuthTokens().size(), 3);
@@ -1763,14 +1874,14 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     // Blow away any existing tokens to force internal NewTracker.
     pc.user_data().Clear();
     // Do an initial request to get Tracker tokens
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     auth_tokens = pc.user_data().GetAuthTokens();
     ASSERT_GE(auth_tokens.size(), 3);
     // Because we have tokens the first request will be RefreshState
     pc.SetRequestMutators({"Response:code=500", "Response:code=500"});
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success) << static_cast<int>(res->status);
     ASSERT_GE(pc.user_data().GetAuthTokens().size(), 3);
@@ -1779,14 +1890,14 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     // Blow away any existing tokens to force internal NewTracker.
     pc.user_data().Clear();
     // Do an initial request to get Tracker tokens
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     auth_tokens = pc.user_data().GetAuthTokens();
     ASSERT_GE(auth_tokens.size(), 3);
     // Because we have tokens the first request will be RefreshState
     pc.SetRequestMutators({"Response:code=500", "Response:code=500", "Response:code=500"});
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::ServerError) << static_cast<int>(res->status);
     // Tokens should be unchanged
@@ -1795,14 +1906,14 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     // RefreshState response with status code indicating invalid tokens
     pc.user_data().Clear();
     // Do an initial request to get Tracker tokens
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     auth_tokens = pc.user_data().GetAuthTokens();
     ASSERT_GE(auth_tokens.size(), 3);
     // Because we have tokens the first request will be RefreshState
     pc.SetRequestMutators({"Response:code=401"});
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::InvalidTokens) << static_cast<int>(res->status);
     // UserData should be cleared
@@ -1813,7 +1924,7 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     pc.user_data().Clear();
     // First request is NewTracker
     pc.SetRequestMutators({"Response:code=666"});
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_FALSE(res) << static_cast<int>(res->status);
     // Should be no tokens
     ASSERT_EQ(pc.user_data().GetAuthTokens().size(), 0);
@@ -1822,17 +1933,39 @@ TEST_F(TestPsiCash, RefreshStateMutators) {
     // RefreshState response with unknown status code
     pc.user_data().Clear();
     // Do an initial request to get Tracker tokens
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_TRUE(res) << res.error();
     ASSERT_EQ(res->status, Status::Success);
     auth_tokens = pc.user_data().GetAuthTokens();
     ASSERT_GE(auth_tokens.size(), 3);
     // Because we have tokens the first request will be RefreshState
     pc.SetRequestMutators({"Response:code=666"});
-    res = pc.RefreshState({});
+    res = pc.RefreshState(false, {});
     ASSERT_FALSE(res) << static_cast<int>(res->status);
     // Tokens should be unchanged
     ASSERT_TRUE(AuthTokenSetsEqual(auth_tokens, pc.user_data().GetAuthTokens()));
+}
+
+TEST_F(TestPsiCash, RefreshStateOffline) {
+    PsiCashTester pc;
+    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
+    ASSERT_FALSE(err) << err;
+
+    bool request_attempted = false;
+    const MakeHTTPRequestFn noHTTPRequester = [&request_attempted](const HTTPParams&) -> HTTPResult {
+        request_attempted = true;
+        return HTTPResult();
+    };
+    const MakeHTTPRequestFn errorHTTPRequester = [&request_attempted](const HTTPParams&) -> HTTPResult {
+        auto res = HTTPResult();
+        res.code = HTTPResult::RECOVERABLE_ERROR;
+        res.error = "test";
+        return res;
+    };
+
+
+    pc.SetHTTPRequestFn(noHTTPRequester);
+
 }
 
 TEST_F(TestPsiCash, NewExpiringPurchase) {
@@ -1842,13 +1975,13 @@ TEST_F(TestPsiCash, NewExpiringPurchase) {
 
     // Simple success
     pc.user_data().Clear();
-    auto refresh_result = pc.RefreshState({});
+    auto refresh_result = pc.RefreshState(false, {});
     ASSERT_TRUE(refresh_result) << refresh_result.error();
     ASSERT_EQ(refresh_result->status, Status::Success);
     auto initial_balance = pc.Balance();
     err = MAKE_1T_REWARD(pc, 1);
     ASSERT_FALSE(err) << err;
-    refresh_result = pc.RefreshState({});
+    refresh_result = pc.RefreshState(false, {});
     ASSERT_TRUE(refresh_result) << refresh_result.error();
     ASSERT_EQ(refresh_result->status, Status::Success);
     ASSERT_EQ(pc.Balance(), initial_balance + ONE_TRILLION);
@@ -1906,7 +2039,7 @@ TEST_F(TestPsiCash, NewExpiringPurchase) {
     initial_balance = pc.Balance();
     err = MAKE_1T_REWARD(pc, 3);
     ASSERT_FALSE(err) << err;
-    refresh_result = pc.RefreshState({});
+    refresh_result = pc.RefreshState(false, {});
     ASSERT_TRUE(refresh_result) << refresh_result.error();
     ASSERT_EQ(refresh_result->status, Status::Success);
     ASSERT_EQ(pc.Balance(), initial_balance + 3*ONE_TRILLION);
@@ -1976,7 +2109,7 @@ TEST_F(TestPsiCash, NewExpiringPurchase) {
 
     // Failure: insufficient balance
     pc.user_data().Clear();
-    refresh_result = pc.RefreshState({});
+    refresh_result = pc.RefreshState(false, {});
     ASSERT_TRUE(refresh_result) << refresh_result.error();
     ASSERT_EQ(refresh_result->status, Status::Success);
     ASSERT_THAT(pc.Balance(), AllOf(Ge(0), Le(MAX_STARTING_BALANCE)));
@@ -2002,14 +2135,14 @@ TEST_F(TestPsiCash, NewExpiringPurchase) {
     auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
     ASSERT_TRUE(res_login);
     ASSERT_EQ(res_login->status, Status::Success);
-    refresh_result = pc.RefreshState({});
+    refresh_result = pc.RefreshState(false, {});
     ASSERT_TRUE(refresh_result);
     ASSERT_EQ(refresh_result->status, Status::Success);
     ASSERT_TRUE(pc.IsAccount());
     initial_balance = pc.Balance();
     err = MAKE_1T_REWARD(pc, 1);
     ASSERT_FALSE(err) << err;
-    refresh_result = pc.RefreshState({});
+    refresh_result = pc.RefreshState(false, {});
     ASSERT_TRUE(refresh_result);
     ASSERT_EQ(refresh_result->status, Status::Success);
     ASSERT_EQ(pc.Balance(), initial_balance + ONE_TRILLION);
@@ -2032,14 +2165,14 @@ TEST_F(TestPsiCash, NewExpiringPurchasePauserCommitBug) {
     auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
     ASSERT_TRUE(res_login);
     ASSERT_EQ(res_login->status, Status::Success);
-    auto refresh_result = pc.RefreshState({});
+    auto refresh_result = pc.RefreshState(false, {});
     ASSERT_TRUE(refresh_result);
     ASSERT_EQ(refresh_result->status, Status::Success);
     ASSERT_TRUE(pc.IsAccount());
     auto balance = pc.Balance();
     err = MAKE_1T_REWARD(pc, 2); // make sure we have enough balance for two purchases
     ASSERT_FALSE(err) << err;
-    refresh_result = pc.RefreshState({});
+    refresh_result = pc.RefreshState(false, {});
     ASSERT_TRUE(refresh_result);
     ASSERT_EQ(refresh_result->status, Status::Success);
     ASSERT_EQ(pc.Balance(), balance + ONE_TRILLION + ONE_TRILLION);
@@ -2076,7 +2209,7 @@ TEST_F(TestPsiCash, NewExpiringPurchaseMutators) {
     }
 
     // Failure: invalid tokens
-    auto refresh_result = pc.RefreshState({});
+    auto refresh_result = pc.RefreshState(false, {});
     ASSERT_TRUE(refresh_result) << refresh_result.error();
     ASSERT_EQ(refresh_result->status, Status::Success);
     pc.SetRequestMutators({"InvalidTokens"});
@@ -2140,7 +2273,7 @@ TEST_F(TestPsiCash, HTTPRequestBadResult) {
     errResult.code = HTTPResult::RECOVERABLE_ERROR;
     errResult.error = want_error_message;
     pc.SetHTTPRequestFn(FakeHTTPRequester(errResult));
-    auto refresh_result = pc.RefreshState({});
+    auto refresh_result = pc.RefreshState(false, {});
     ASSERT_FALSE(refresh_result);
     ASSERT_NE(refresh_result.error().ToString().find(want_error_message), string::npos);
 }
@@ -2189,7 +2322,7 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_EQ(pc.Balance(), 0); // we haven't called RefreshState yet
     auto prev_earner_token = pc.user_data().GetAuthTokens()["earner"].id;
 
-    auto res_refresh = pc.RefreshState({});
+    auto res_refresh = pc.RefreshState(false, {});
     ASSERT_TRUE(res_refresh);
     ASSERT_EQ(res_refresh->status, Status::Success);
     ASSERT_GT(pc.Balance(), 0); // Our test accounts don't have zero balance
@@ -2240,7 +2373,7 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_NE(pc.user_data().GetAuthTokens()["earner"].id, prev_earner_token);
     ASSERT_EQ(pc.Balance(), 0); // we haven't yet done a RefreshState
 
-    res_refresh = pc.RefreshState({});
+    res_refresh = pc.RefreshState(false, {});
     ASSERT_TRUE(res_refresh);
     ASSERT_EQ(res_refresh->status, Status::Success);
     ASSERT_GT(pc.Balance(), 0); // Our test accounts don't have zero balance
@@ -2257,7 +2390,7 @@ TEST_F(TestPsiCash, AccountLoginSimple) {
     ASSERT_NE(pc.user_data().GetAuthTokens()["earner"].id, prev_earner_token);
     ASSERT_EQ(pc.Balance(), 0); // we haven't yet done a RefreshState
 
-    res_refresh = pc.RefreshState({});
+    res_refresh = pc.RefreshState(false, {});
     ASSERT_TRUE(res_refresh);
     ASSERT_EQ(res_refresh->status, Status::Success);
     ASSERT_GT(pc.Balance(), 0); // Our test accounts don't have zero balance
@@ -2274,7 +2407,7 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
     ASSERT_FALSE(res_login->last_tracker_merge);
 
     // Post-login RefreshState is required
-    auto res_refresh = pc.RefreshState({});
+    auto res_refresh = pc.RefreshState(false, {});
     ASSERT_TRUE(res_refresh) << res_refresh.error();
     ASSERT_EQ(res_refresh->status, Status::Success);
     ASSERT_TRUE(pc.IsAccount());
@@ -2289,7 +2422,7 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
     ASSERT_FALSE(err);
 
     // Get a new tracker
-    res_refresh = pc.RefreshState({});
+    res_refresh = pc.RefreshState(false, {});
     ASSERT_TRUE(res_refresh) << res_refresh.error();
     ASSERT_EQ(res_refresh->status, Status::Success);
     ASSERT_FALSE(pc.IsAccount());
@@ -2305,7 +2438,7 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
     ASSERT_TRUE(res_login->last_tracker_merge);
     ASSERT_FALSE(*res_login->last_tracker_merge); // this tracker has near-infinite merges
 
-    res_refresh = pc.RefreshState({});
+    res_refresh = pc.RefreshState(false, {});
     ASSERT_TRUE(res_refresh) << res_refresh.error();
     ASSERT_EQ(res_refresh->status, Status::Success);
     ASSERT_TRUE(pc.IsAccount());
@@ -2324,7 +2457,7 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
         ASSERT_FALSE(err);
 
         // Get a new tracker
-        res_refresh = pc.RefreshState({});
+        res_refresh = pc.RefreshState(false, {});
         ASSERT_TRUE(res_refresh) << res_refresh.error();
         ASSERT_EQ(res_refresh->status, Status::Success);
         ASSERT_FALSE(pc.IsAccount());
@@ -2341,7 +2474,7 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
         ASSERT_TRUE(res_login->last_tracker_merge);
         ASSERT_TRUE(*res_login->last_tracker_merge); // forced
 
-        res_refresh = pc.RefreshState({});
+        res_refresh = pc.RefreshState(false, {});
         ASSERT_TRUE(res_refresh) << res_refresh.error();
         ASSERT_EQ(res_refresh->status, Status::Success);
         ASSERT_TRUE(pc.IsAccount());
@@ -2361,7 +2494,7 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
     ASSERT_FALSE(err);
 
     // Get a new tracker
-    res_refresh = pc.RefreshState({});
+    res_refresh = pc.RefreshState(false, {});
     ASSERT_TRUE(res_refresh) << res_refresh.error();
     ASSERT_EQ(res_refresh->status, Status::Success);
     ASSERT_FALSE(pc.IsAccount());
@@ -2402,7 +2535,7 @@ TEST_F(TestPsiCash, AccountLogout) {
     ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
 
     // RefreshState to get a tracker and try to log out again
-    auto res_refresh = pc.RefreshState({});
+    auto res_refresh = pc.RefreshState(false, {});
     ASSERT_TRUE(res_refresh);
     ASSERT_EQ(res_refresh->status, Status::Success);
     ASSERT_EQ(pc.user_data().ValidTokenTypes().size(), 3);
@@ -2430,7 +2563,7 @@ TEST_F(TestPsiCash, AccountLogout) {
     ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
     auto prev_earner_token = pc.user_data().GetAuthTokens()["earner"].id;
 
-    res_refresh = pc.RefreshState({});
+    res_refresh = pc.RefreshState(false, {});
     ASSERT_TRUE(res_refresh);
     ASSERT_EQ(res_refresh->status, Status::Success);
     ASSERT_GT(pc.Balance(), 0); // Our test accounts don't have zero balance
@@ -2576,7 +2709,7 @@ TEST_F(TestPsiCash, AccountLogoutNeedReconnect) {
     ASSERT_TRUE(pc.IsAccount());
     ASSERT_TRUE(pc.AccountUsername());
     ASSERT_EQ(*pc.AccountUsername(), TEST_ACCOUNT_ONE_USERNAME);
-    auto res_refresh = pc.RefreshState({});
+    auto res_refresh = pc.RefreshState(false, {});
     ASSERT_TRUE(res_refresh);
     ASSERT_EQ(res_refresh->status, Status::Success);
 
@@ -2597,7 +2730,7 @@ TEST_F(TestPsiCash, AccountLogoutNeedReconnect) {
     res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
     ASSERT_TRUE(res_login) << res_login.error();
     ASSERT_EQ(res_login->status, Status::Success);
-    res_refresh = pc.RefreshState({});
+    res_refresh = pc.RefreshState(false, {});
     ASSERT_TRUE(res_refresh);
     ASSERT_EQ(res_refresh->status, Status::Success);
 
@@ -2617,7 +2750,7 @@ TEST_F(TestPsiCash, AccountLogoutNeedReconnect) {
     res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
     ASSERT_TRUE(res_login) << res_login.error();
     ASSERT_EQ(res_login->status, Status::Success);
-    res_refresh = pc.RefreshState({});
+    res_refresh = pc.RefreshState(false, {});
     ASSERT_TRUE(res_refresh);
     ASSERT_EQ(res_refresh->status, Status::Success);
 
@@ -2645,7 +2778,7 @@ TEST_F(TestPsiCash, AccountLogoutLocalOnly) {
     ASSERT_TRUE(pc.IsAccount());
     ASSERT_TRUE(pc.AccountUsername());
     ASSERT_EQ(*pc.AccountUsername(), TEST_ACCOUNT_ONE_USERNAME);
-    auto res_refresh = pc.RefreshState({});
+    auto res_refresh = pc.RefreshState(false, {});
     ASSERT_TRUE(res_refresh);
     ASSERT_EQ(res_refresh->status, Status::Success);
 

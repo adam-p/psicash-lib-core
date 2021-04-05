@@ -100,6 +100,10 @@ bool DateTime::IsZero() const {
     return time_point_ == kTimePointZero;
 }
 
+string DateTime::ToString() const {
+    return ToISO8601();
+}
+
 string DateTime::ToISO8601() const {
     ostringstream ss;
     ss.imbue(std::locale::classic());

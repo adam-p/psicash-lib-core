@@ -206,7 +206,7 @@ public:
     /// If this is false and `IsAccount()` is true, then the user is a logged-out account
     /// and needs to log in to continue. If this is false and `IsAccount()` is false,
     /// `RefreshState()` needs to be called to get new Tracker tokens.
-    bool HasTokens();
+    bool HasTokens() const;
 
     /// Returns the stored info about whether the user is a Tracker or an Account.
     bool IsAccount() const;
@@ -319,6 +319,10 @@ public:
 
     Input parameters:
 
+    • local_only: If true, no network call will be made, and the refresh will utilize only
+      locally-stored data (i.e., only token expiry will be checked, and a transition into
+      a logged-out state may result).
+
     • purchase_classes: The purchase class names for which prices should be
       retrieved, like `{"speed-boost"}`. If null or empty, no purchase prices will be retrieved.
 
@@ -351,6 +355,7 @@ public:
         bool reconnect_required;
     };
     error::Result<RefreshStateResponse> RefreshState(
+      bool local_only,
       const std::vector<std::string>& purchase_classes);
 
     /**
@@ -474,8 +479,6 @@ public:
 
 protected:
     // See implementation for descriptions of non-public methods.
-
-    bool HasTokensConst() const;
 
     error::Result<std::string> AddEarnerTokenToURL(const std::string& url_string, bool query_param_only) const;
 

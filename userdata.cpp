@@ -273,21 +273,35 @@ error::Error UserData::CullAuthTokens(const std::map<std::string, bool>& valid_t
     // absence of a stored token from valid_tokens as an indicator that it's invalid.
     // (There's no much we can do about the presence of a token in valid_tokens that we
     // don't have stored. We'll ignore it.)
+    //
+    // We handle _any_ invalid token as reason to blow away _all_ tokens. An incomplete
+    // set is effectively the same as no set at all.
 
-    auto all_auth_tokens = GetAuthTokens();
-    AuthTokens good_auth_tokens;
+    bool all_tokens_okay = true;
 
     // all_auth_tokens is { "earner": {ID: "ABCD0123", Expiry: <>} } and valid_tokens is { "ABCD0123": true }
-    for (const auto& t : all_auth_tokens) {
+    for (const auto& t : GetAuthTokens()) {
+        bool t_ok = false;
         for (const auto& vtt : valid_tokens) {
             if (vtt.first == t.second.id && vtt.second) {
-                good_auth_tokens[t.first] = t.second;
+                t_ok = true;
                 break;
             }
         }
+
+        if (!t_ok) {
+            all_tokens_okay = false;
+            break;
+        }
     }
 
-    return PassError(datastore_.Set(kAuthTokensPtr, good_auth_tokens));
+    if (all_tokens_okay) {
+        // All our tokens are good, so there's nothing to do
+        return error::nullerr;
+    }
+
+    // Clear all stored tokens
+    return PassError(datastore_.Set(kAuthTokensPtr, {}));
 }
 
 psicash::TokenTypes UserData::ValidTokenTypes() const {
