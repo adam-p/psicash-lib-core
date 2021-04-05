@@ -1066,7 +1066,7 @@ Result<PsiCash::NewExpiringPurchaseResponse> PsiCash::NewExpiringPurchase(
     return *response;
 }
 
-Result<PsiCash::AccountLogoutResponse> PsiCash::AccountLogout(bool local_only) {
+Result<PsiCash::AccountLogoutResponse> PsiCash::AccountLogout() {
     TOKENS_REQUIRED;
 
     if (!IsAccount()) {
@@ -1077,23 +1077,21 @@ Result<PsiCash::AccountLogoutResponse> PsiCash::AccountLogout(bool local_only) {
     // one means we will need to reconnect after logging out.
     bool reconnect_required = !GetAuthorizations(true).empty();
 
-    if (!local_only) {
-        Error httpErr;
-        auto result = MakeHTTPRequestWithRetry(
-                kMethodPOST,
-                "/logout",
-                true,  // include auth tokens
-                {},
-                nullopt // body
-        );
-        if (!result) {
-            httpErr = result.error();
-        }
-        else if (result->code != kHTTPStatusOK) {
-            httpErr = MakeNoncriticalError(utils::Stringer("logout request failed; code:", result->code, "; body:", result->body));
-        }
-        // Even if an error occurred, we still want to do the local logout, so carry on.
+    Error httpErr;
+    auto result = MakeHTTPRequestWithRetry(
+            kMethodPOST,
+            "/logout",
+            true,  // include auth tokens
+            {},
+            nullopt // body
+    );
+    if (!result) {
+        httpErr = result.error();
     }
+    else if (result->code != kHTTPStatusOK) {
+        httpErr = MakeNoncriticalError(utils::Stringer("logout request failed; code:", result->code, "; body:", result->body));
+    }
+    // Even if an error occurred, we still want to do the local logout, so carry on.
 
     auto localErr = user_data_->DeleteUserData(true);
 

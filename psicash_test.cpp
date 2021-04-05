@@ -1319,7 +1319,7 @@ TEST_F(TestPsiCash, RefreshStateAccount) {
     ASSERT_GT(pc.GetPurchasePrices().size(), 0);
 
     // Log out and try to refresh
-    auto res_logout = pc.AccountLogout(false);
+    auto res_logout = pc.AccountLogout();
     ASSERT_TRUE(res_logout);
     ASSERT_TRUE(pc.IsAccount());               // should still be is-account
     ASSERT_FALSE(pc.HasTokens());
@@ -1545,7 +1545,7 @@ TEST_F(TestPsiCash, RefreshStateRetrievePurchases) {
     ASSERT_EQ(pc.GetPurchases(), expected_purchases);
 
     // Logout
-    auto res_logout = pc.AccountLogout(false);
+    auto res_logout = pc.AccountLogout();
     ASSERT_TRUE(res_logout);
     ASSERT_TRUE(pc.IsAccount());               // should still be is-account
     ASSERT_FALSE(pc.HasTokens());
@@ -2416,7 +2416,7 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
     auto starting_balance = pc.Balance();
 
     // Log out and reset so we can get a tracker
-    auto res_logout = pc.AccountLogout(false);
+    auto res_logout = pc.AccountLogout();
     ASSERT_TRUE(res_logout);
     err = pc.ResetUser();
     ASSERT_FALSE(err);
@@ -2451,7 +2451,7 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
         starting_balance = pc.Balance();
 
         // Log out and reset so we can get a tracker
-        auto res_logout = pc.AccountLogout(false);
+        auto res_logout = pc.AccountLogout();
         ASSERT_TRUE(res_logout);
         err = pc.ResetUser();
         ASSERT_FALSE(err);
@@ -2488,7 +2488,7 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
     //
 
     // Log out and reset so we can get a tracker
-    res_logout = pc.AccountLogout(false);
+    res_logout = pc.AccountLogout();
     ASSERT_TRUE(res_logout);
     err = pc.ResetUser();
     ASSERT_FALSE(err);
@@ -2527,7 +2527,7 @@ TEST_F(TestPsiCash, AccountLogout) {
     auto instance_id = pc.user_data().GetInstanceID();
 
     // Try to log out before logging in
-    auto res_logout = pc.AccountLogout(false);
+    auto res_logout = pc.AccountLogout();
     ASSERT_FALSE(res_logout);
     ASSERT_FALSE(pc.IsAccount());
     ASSERT_FALSE(pc.HasTokens());
@@ -2543,7 +2543,7 @@ TEST_F(TestPsiCash, AccountLogout) {
     ASSERT_FALSE(pc.IsAccount());
     ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
 
-    res_logout = pc.AccountLogout(false);
+    res_logout = pc.AccountLogout();
     ASSERT_FALSE(res_logout); // fails and has no effect
     ASSERT_EQ(pc.user_data().ValidTokenTypes().size(), 3);
     ASSERT_THAT(pc.user_data().ValidTokenTypes(), AllOf(Contains("spender"), Contains("earner"), Contains("indicator")));
@@ -2569,7 +2569,7 @@ TEST_F(TestPsiCash, AccountLogout) {
     ASSERT_GT(pc.Balance(), 0); // Our test accounts don't have zero balance
     ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
 
-    res_logout = pc.AccountLogout(false);
+    res_logout = pc.AccountLogout();
     ASSERT_TRUE(res_logout) << res_logout.error();
     ASSERT_FALSE(res_logout->reconnect_required);
     // This is the state we should be in after a logout
@@ -2580,7 +2580,7 @@ TEST_F(TestPsiCash, AccountLogout) {
     ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
 
     // We're in the was-account-logged-in state. Try to log out again.
-    res_logout = pc.AccountLogout(false);
+    res_logout = pc.AccountLogout();
     ASSERT_FALSE(res_logout); // should fail
     // No change to this state
     ASSERT_TRUE(pc.IsAccount());
@@ -2604,7 +2604,7 @@ TEST_F(TestPsiCash, AccountLogout) {
     prev_earner_token = pc.user_data().GetAuthTokens()["earner"].id;
 
     // Log out, reset, log in with a different user (without first getting a new tracker)
-    res_logout = pc.AccountLogout(false);
+    res_logout = pc.AccountLogout();
     ASSERT_TRUE(res_logout);
     ASSERT_FALSE(res_logout->reconnect_required);
     // This is the state we should be in after a logout
@@ -2633,7 +2633,7 @@ TEST_F(TestPsiCash, AccountLogout) {
     ASSERT_NE(pc.user_data().GetAuthTokens()["earner"].id, prev_earner_token); // different token
     ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
 
-    res_logout = pc.AccountLogout(false);
+    res_logout = pc.AccountLogout();
     ASSERT_TRUE(res_logout);
     ASSERT_FALSE(res_logout->reconnect_required);
     ASSERT_TRUE(pc.IsAccount());
@@ -2660,7 +2660,7 @@ TEST_F(TestPsiCash, AccountLogout) {
     ASSERT_EQ(*pc.AccountUsername(), TEST_ACCOUNT_ONE_USERNAME);
     ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
 
-    res_logout = pc.AccountLogout(false);
+    res_logout = pc.AccountLogout();
     ASSERT_TRUE(res_logout);
     ASSERT_FALSE(res_logout->reconnect_required);
     ASSERT_TRUE(pc.IsAccount());
@@ -2669,9 +2669,32 @@ TEST_F(TestPsiCash, AccountLogout) {
     ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
 
     // Logging out twice is an error
-    res_logout = pc.AccountLogout(false);
+    res_logout = pc.AccountLogout();
     ASSERT_FALSE(res_logout);
     ASSERT_EQ(pc.user_data().GetInstanceID(), instance_id);
+
+    // We silently fall back to a local-only logout, so we're going to specifically check
+    // that the remote logout is occurring (in the absence of an error).
+    // First, get tokens.
+    res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::Success);
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_TRUE(pc.HasTokens());
+    // Save them for later.
+    auto auth_tokens = pc.user_data().GetAuthTokens();
+    // Logout should invalidate the tokens remotely.
+    res_logout = pc.AccountLogout();
+    ASSERT_TRUE(res_logout);
+    ASSERT_TRUE(pc.IsAccount());
+    ASSERT_FALSE(pc.HasTokens());
+    // Now restore the tokens and try to use them (note that we're in a pretty broken
+    // state here but it should be good enough for this test).
+    ASSERT_FALSE(pc.user_data().SetAuthTokens(auth_tokens, true, TEST_ACCOUNT_ONE_USERNAME));
+    auto purchase_result = pc.NewExpiringPurchase(TEST_DEBIT_TRANSACTION_CLASS, TEST_ONE_TRILLION_TEN_SECOND_DISTINGUISHER, ONE_TRILLION);
+    ASSERT_TRUE(purchase_result);
+    // Server should respond with InvalidTokens
+    ASSERT_EQ(purchase_result->status, Status::InvalidTokens);
 
     // Test logging out with invalid tokens.
     if (pc.MutatorsEnabled()) {
@@ -2687,7 +2710,7 @@ TEST_F(TestPsiCash, AccountLogout) {
         // Then log out with invalid tokens. It should succeed even though nothing was done
         // server-side, and have nuked our local state.
         pc.SetRequestMutators({"InvalidTokens"});
-        res_logout = pc.AccountLogout(false);
+        res_logout = pc.AccountLogout();
         ASSERT_TRUE(res_logout);
         ASSERT_FALSE(res_logout->reconnect_required);
         ASSERT_TRUE(pc.IsAccount());
@@ -2721,7 +2744,7 @@ TEST_F(TestPsiCash, AccountLogoutNeedReconnect) {
     ASSERT_FALSE(err) << err;
 
     // Log out with no active purchases
-    auto res_logout = pc.AccountLogout(false);
+    auto res_logout = pc.AccountLogout();
     ASSERT_TRUE(res_logout) << res_logout.error();
     // No purchase, so no reconnect required
     ASSERT_FALSE(res_logout->reconnect_required);
@@ -2742,7 +2765,7 @@ TEST_F(TestPsiCash, AccountLogoutNeedReconnect) {
     ASSERT_EQ(pc.ActivePurchases().size(), 1);
 
     // Log out, should still be no reconnect required
-    res_logout = pc.AccountLogout(false);
+    res_logout = pc.AccountLogout();
     ASSERT_TRUE(res_logout);
     ASSERT_FALSE(res_logout->reconnect_required);
 
@@ -2762,42 +2785,9 @@ TEST_F(TestPsiCash, AccountLogoutNeedReconnect) {
     ASSERT_EQ(pc.ActivePurchases().size(), 2) << json(pc.ActivePurchases());
 
     // Log out; now that we have a purchase with authorization, we should need reconnect
-    res_logout = pc.AccountLogout(false);
+    res_logout = pc.AccountLogout();
     ASSERT_TRUE(res_logout);
     ASSERT_TRUE(res_logout->reconnect_required);
-}
-
-TEST_F(TestPsiCash, AccountLogoutLocalOnly) {
-    PsiCashTester pc;
-    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
-    ASSERT_FALSE(err);
-
-    auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
-    ASSERT_TRUE(res_login) << res_login.error();
-    ASSERT_EQ(res_login->status, Status::Success);
-    ASSERT_TRUE(pc.IsAccount());
-    ASSERT_TRUE(pc.AccountUsername());
-    ASSERT_EQ(*pc.AccountUsername(), TEST_ACCOUNT_ONE_USERNAME);
-    auto res_refresh = pc.RefreshState(false, {});
-    ASSERT_TRUE(res_refresh);
-    ASSERT_EQ(res_refresh->status, Status::Success);
-
-    // To test that the logout is only happening locally, we will use a custom
-    // HTTPRequester to detect if a network call is attempted.
-    bool request_attempted = false;
-    const MakeHTTPRequestFn noHTTPRequester = [&request_attempted](const HTTPParams&) -> HTTPResult {
-        request_attempted = true;
-        return HTTPResult();
-    };
-    pc.SetHTTPRequestFn(noHTTPRequester);
-
-    auto res_logout = pc.AccountLogout(true);
-    ASSERT_FALSE(request_attempted);
-    ASSERT_TRUE(res_logout) << res_logout.error();
-    ASSERT_FALSE(res_logout->reconnect_required);
-    ASSERT_TRUE(pc.IsAccount());
-    ASSERT_FALSE(pc.HasTokens());
-    ASSERT_FALSE(pc.AccountUsername());
 }
 
 TEST_F(TestPsiCash, PurchaseFromJSON) {
