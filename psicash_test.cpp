@@ -1405,22 +1405,37 @@ TEST_F(TestPsiCash, RefreshStateAccount) {
 }
 
 TEST_F(TestPsiCash, RefreshStateRetrievePurchases) {
-    PsiCashTester pc;
-    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
-    ASSERT_FALSE(err);
-
     // We'll go through a set of tests twice -- once with a tracker, once with an account
 
-    // Get a tracker
-    auto res_refresh = pc.RefreshState(false, {"speed-boost"});
-    ASSERT_TRUE(res_refresh) << res_refresh.error();
-    ASSERT_EQ(res_refresh->status, Status::Success);
-    ASSERT_FALSE(res_refresh->reconnect_required);
-
-    Purchases expected_purchases;
-
     for (auto i = 0; i < 2; i++) {
-        auto err = MAKE_1T_REWARD(pc, 3);
+        Purchases expected_purchases;
+
+        PsiCashTester pc;
+        auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false);
+        ASSERT_FALSE(err);
+
+        if (i == 0) {
+            // Get a tracker
+            auto res_refresh = pc.RefreshState(false, {"speed-boost"});
+            ASSERT_TRUE(res_refresh) << res_refresh.error();
+            ASSERT_EQ(res_refresh->status, Status::Success);
+            ASSERT_FALSE(res_refresh->reconnect_required);
+        }
+        else {
+            // Log in as an account
+            auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
+            ASSERT_TRUE(res_login);
+            ASSERT_EQ(res_login->status, Status::Success);
+            auto res_refresh = pc.RefreshState(false, {});
+            ASSERT_TRUE(res_refresh);
+            ASSERT_EQ(res_refresh->status, Status::Success);
+            ASSERT_TRUE(pc.IsAccount());
+            // Should have reset everything
+            ASSERT_EQ(pc.GetPurchases().size(), 0);
+            ASSERT_EQ(pc.user_data().GetLastTransactionID(), "");
+        }
+
+        err = MAKE_1T_REWARD(pc, 3);
         ASSERT_FALSE(err) << err;
 
         // We have no purchases yet
@@ -1447,7 +1462,7 @@ TEST_F(TestPsiCash, RefreshStateRetrievePurchases) {
         ASSERT_EQ(pc.user_data().GetLastTransactionID(), expected_purchases.back().id);
 
         // Refresh
-        res_refresh = pc.RefreshState(false, {"speed-boost"});
+        auto res_refresh = pc.RefreshState(false, {"speed-boost"});
         ASSERT_TRUE(res_refresh) << res_refresh.error();
         ASSERT_EQ(res_refresh->status, Status::Success);
 
@@ -1521,45 +1536,30 @@ TEST_F(TestPsiCash, RefreshStateRetrievePurchases) {
         // Should have got our Speed Boost, so reconnect is required
         ASSERT_TRUE(res_refresh->reconnect_required);
 
-        if (i == 0) {
-            // Log in to do the tests a second time as an account
+
+        // Account-only tests
+        if (i == 1) {
+            ASSERT_GT(expected_purchases.size(), 0);
+            ASSERT_EQ(pc.GetPurchases(), expected_purchases);
+
+            // Logout
+            auto res_logout = pc.AccountLogout();
+            ASSERT_TRUE(res_logout);
+            ASSERT_TRUE(pc.IsAccount());               // should still be is-account
+            ASSERT_FALSE(pc.HasTokens());
+            ASSERT_EQ(pc.GetPurchases().size(), 0);
+            // Log back in
             auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
             ASSERT_TRUE(res_login);
             ASSERT_EQ(res_login->status, Status::Success);
-            res_refresh = pc.RefreshState(false, {});
+            // Retrieve our purchases
+            auto res_refresh = pc.RefreshState(false, {});
             ASSERT_TRUE(res_refresh);
             ASSERT_EQ(res_refresh->status, Status::Success);
             ASSERT_TRUE(pc.IsAccount());
-            // Should have reset everything
-            ASSERT_EQ(pc.GetPurchases().size(), 0);
-            ASSERT_EQ(pc.user_data().GetLastTransactionID(), "");
-            expected_purchases.clear();
+            ASSERT_EQ(pc.GetPurchases(), expected_purchases);
         }
     }
-
-    //
-    // Account tests
-    //
-
-    ASSERT_GT(expected_purchases.size(), 0);
-    ASSERT_EQ(pc.GetPurchases(), expected_purchases);
-
-    // Logout
-    auto res_logout = pc.AccountLogout();
-    ASSERT_TRUE(res_logout);
-    ASSERT_TRUE(pc.IsAccount());               // should still be is-account
-    ASSERT_FALSE(pc.HasTokens());
-    ASSERT_EQ(pc.GetPurchases().size(), 0);
-    // Log back in
-    auto res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
-    ASSERT_TRUE(res_login);
-    ASSERT_EQ(res_login->status, Status::Success);
-    // Retrieve our purchases
-    res_refresh = pc.RefreshState(false, {});
-    ASSERT_TRUE(res_refresh);
-    ASSERT_EQ(res_refresh->status, Status::Success);
-    ASSERT_TRUE(pc.IsAccount());
-    ASSERT_EQ(pc.GetPurchases(), expected_purchases);
 }
 
 TEST_F(TestPsiCash, RefreshStateLocalOnly) {
@@ -2429,7 +2429,19 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
     ASSERT_TRUE(pc.HasTokens());
     ASSERT_THAT(pc.Balance(), AllOf(Ge(0), Le(MAX_STARTING_BALANCE)));
 
+    // Get some balance with which to make purchases
+    err = MAKE_1T_REWARD(pc, 3);
+    ASSERT_FALSE(err) << err;
+
+    // Make a purchase
+    auto purchase_result = pc.NewExpiringPurchase(TEST_DEBIT_TRANSACTION_CLASS, TEST_ONE_TRILLION_TEN_SECOND_DISTINGUISHER, ONE_TRILLION);
+    ASSERT_TRUE(purchase_result);
+    ASSERT_EQ(purchase_result->status, Status::Success);
+    auto expected_purchases = pc.GetPurchases();
+    ASSERT_THAT(expected_purchases, SizeIs(1));
+
     auto expected_balance = starting_balance + pc.Balance();
+    ASSERT_GT(expected_balance, starting_balance); // If it's not greater, then we're not really testing it
 
     // Log in, with merge
     res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
@@ -2444,7 +2456,10 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
     ASSERT_TRUE(pc.IsAccount());
     ASSERT_TRUE(pc.HasTokens());
 
+    // The tracker merge should have given the account the tracker's balance...
     ASSERT_EQ(pc.Balance(), expected_balance);
+    // ...and the tracker's purchases, which should have been retrieved
+    ASSERT_EQ(pc.GetPurchases(), expected_purchases);
 
     // Force a "last tracker merge"
     if (pc.MutatorsEnabled()) {
