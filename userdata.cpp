@@ -333,6 +333,10 @@ std::string UserData::GetAccountUsername() const {
     return *v;
 }
 
+error::Error UserData::SetAccountUsername(const std::string& v) {
+    return PassError(datastore_.Set(kAccountUsernamePtr, v));
+}
+
 int64_t UserData::GetBalance() const {
     auto v = datastore_.Get<int64_t>(kBalancePtr);
     if (!v) {

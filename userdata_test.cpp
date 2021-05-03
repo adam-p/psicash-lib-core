@@ -396,10 +396,17 @@ TEST_F(TestUserData, AccountUsername)
 
     // Set then get
     string want = "account-username";
+    err = ud.SetAccountUsername(want);
+    ASSERT_FALSE(err);
+    auto got = ud.GetAccountUsername();
+    ASSERT_EQ(got, want);
+
+    // Set via SetAuthTokens
+    want = "account-username";
     auto future = datetime::DateTime::Now().Add(datetime::Duration(10000));
     AuthTokens at = {{"a", {"a", future}}, {"b", {"b", future}}, {"c", {"c", future}}};
     err = ud.SetAuthTokens(at, true, want);
-    auto got = ud.GetAccountUsername();
+    got = ud.GetAccountUsername();
     ASSERT_EQ(got, want);
 
     // With tracker tokens -- so no username

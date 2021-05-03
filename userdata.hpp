@@ -110,6 +110,7 @@ public:
     error::Error SetIsAccount(bool v);
 
     std::string GetAccountUsername() const;
+    error::Error SetAccountUsername(const std::string& v);
 
     int64_t GetBalance() const;
     error::Error SetBalance(int64_t v);

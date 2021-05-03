@@ -853,6 +853,10 @@ Result<PsiCash::RefreshStateResponse> PsiCash::RefreshState(
                 (void)user_data_->SetIsAccount(is_account);
             }
 
+            if (j["AccountUsername"].is_string()) {
+                (void)user_data_->SetAccountUsername(j["AccountUsername"].get<string>());
+            }
+
             if (j["Balance"].is_number_integer()) {
                 (void)user_data_->SetBalance(j["Balance"].get<int64_t>());
             }

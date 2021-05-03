@@ -1318,6 +1318,17 @@ TEST_F(TestPsiCash, RefreshStateAccount) {
     ASSERT_GT(pc.Balance(), 0); // Our test accounts don't have zero balance
     ASSERT_GT(pc.GetPurchasePrices().size(), 0);
 
+    // In order to test the username retrieval, we'll set it to an incorrect value
+    // and then refresh to overwrite it.
+    pc.user_data().SetAccountUsername("not-real-username");
+    ASSERT_TRUE(pc.AccountUsername());
+    ASSERT_EQ(*pc.AccountUsername(), "not-real-username");
+    res_refresh = pc.RefreshState(false, {"speed-boost"});
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(res_refresh->status, Status::Success);
+    ASSERT_TRUE(pc.AccountUsername());
+    ASSERT_EQ(*pc.AccountUsername(), TEST_ACCOUNT_ONE_USERNAME);
+
     // Log out and try to refresh
     auto res_logout = pc.AccountLogout();
     ASSERT_TRUE(res_logout);
