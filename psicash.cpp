@@ -51,16 +51,16 @@ static constexpr const char* kAPIServerHostname = "api.psi.cash";
 static constexpr int kAPIServerPort = 443;
 }
 namespace dev {
-//*
-static constexpr const char* kAPIServerScheme = "https";
-static constexpr const char* kAPIServerHostname = "dev-api.psi.cash";
-static constexpr int kAPIServerPort = 443;
-//*/
-/*
+#define LOCAL_TEST 0
+#if LOCAL_TEST
 static constexpr const char* kAPIServerScheme = "http";
 static constexpr const char* kAPIServerHostname = "localhost";
 static constexpr int kAPIServerPort = 51337;
-*/
+#else
+static constexpr const char* kAPIServerScheme = "https";
+static constexpr const char* kAPIServerHostname = "api.dev.psi.cash";
+static constexpr int kAPIServerPort = 443;
+#endif
 }
 
 static constexpr const char* kAPIServerVersion = "v1";
