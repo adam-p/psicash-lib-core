@@ -41,6 +41,8 @@ static const string INSTANCE_ID = "instanceID";
 static const auto kInstanceIDPtr = kInstancePtr / INSTANCE_ID;
 static constexpr const char* IS_LOGGED_OUT_ACCOUNT = "isLoggedOutAccount";
 static const auto kIsLoggedOutAccountPtr = kInstancePtr / IS_LOGGED_OUT_ACCOUNT;
+static constexpr const char* LOCALE = "locale";
+static const auto kLocalePtr = kInstancePtr / LOCALE;
 //
 // User-specific data keys
 //
@@ -63,8 +65,6 @@ static constexpr const char* LAST_TRANSACTION_ID = "lastTransactionID";
 static const auto kLastTransactionIDPtr = kUserPtr / LAST_TRANSACTION_ID;
 static const char* REQUEST_METADATA = "requestMetadata";
 const json::json_pointer kRequestMetadataPtr = kUserPtr / REQUEST_METADATA; // used in header, so not static
-static constexpr const char* LOCALE = "locale";
-static const auto kLocalePtr = kUserPtr / LOCALE;
 
 
 // These are the possible token types.
