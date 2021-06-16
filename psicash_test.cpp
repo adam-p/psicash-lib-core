@@ -2424,7 +2424,7 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
     ASSERT_TRUE(pc.IsAccount());
     ASSERT_TRUE(pc.HasTokens());
 
-    auto starting_balance = pc.Balance();
+    auto account_starting_balance = pc.Balance();
 
     // Log out and reset so we can get a tracker
     auto res_logout = pc.AccountLogout();
@@ -2451,8 +2451,31 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
     auto expected_purchases = pc.GetPurchases();
     ASSERT_THAT(expected_purchases, SizeIs(1));
 
-    auto expected_balance = starting_balance + pc.Balance();
-    ASSERT_GT(expected_balance, starting_balance); // If it's not greater, then we're not really testing it
+    auto tracker_balance = pc.Balance();
+    auto expected_balance = account_starting_balance + tracker_balance;
+    ASSERT_GT(expected_balance, account_starting_balance); // If it's not greater, then we're not really testing it
+
+    // Log in, with bad username; should be no change to tracker
+    res_login = pc.AccountLogin("badusername", TEST_ACCOUNT_ONE_PASSWORD);
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::InvalidCredentials);
+    res_refresh = pc.RefreshState(false, {});
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(res_refresh->status, Status::Success);
+    ASSERT_FALSE(pc.IsAccount());
+    ASSERT_TRUE(pc.HasTokens());
+    ASSERT_EQ(pc.Balance(), tracker_balance);
+
+    // Log in, with bad password; should be no change to tracker
+    res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, "badpassword");
+    ASSERT_TRUE(res_login);
+    ASSERT_EQ(res_login->status, Status::InvalidCredentials);
+    res_refresh = pc.RefreshState(false, {});
+    ASSERT_TRUE(res_refresh) << res_refresh.error();
+    ASSERT_EQ(res_refresh->status, Status::Success);
+    ASSERT_FALSE(pc.IsAccount());
+    ASSERT_TRUE(pc.HasTokens());
+    ASSERT_EQ(pc.Balance(), tracker_balance);
 
     // Log in, with merge
     res_login = pc.AccountLogin(TEST_ACCOUNT_ONE_USERNAME, TEST_ACCOUNT_ONE_PASSWORD);
@@ -2474,7 +2497,7 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
 
     // Force a "last tracker merge"
     if (pc.MutatorsEnabled()) {
-        starting_balance = pc.Balance();
+        account_starting_balance = pc.Balance();
 
         // Log out and reset so we can get a tracker
         auto res_logout = pc.AccountLogout();
@@ -2490,7 +2513,7 @@ TEST_F(TestPsiCash, AccountLoginMerge) {
         ASSERT_TRUE(pc.HasTokens());
         ASSERT_THAT(pc.Balance(), AllOf(Ge(0), Le(MAX_STARTING_BALANCE)));
 
-        expected_balance = starting_balance + pc.Balance();
+        expected_balance = account_starting_balance + pc.Balance();
 
         // Log in, with merge and mutator to force "last tracker merge"
         pc.SetRequestMutators({"EditBody:response,TrackerMergesRemaining=0"});
