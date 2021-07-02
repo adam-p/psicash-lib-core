@@ -1048,15 +1048,19 @@ TEST_F(TestPsiCash, GetBuyPsiURL) {
 }
 
 TEST_F(TestPsiCash, GetUserSiteURL) {
-    // The only state that affects the URL is the testing/dev and user agent.
+    // State that affects the URL: testing/dev flag, user agent, locale, account username.
 
-    for (bool test : {false, true}) {
+    for (bool test : {true}) { // When accounts are live, we can use this: for (bool test : {false, true}) {
         for (PsiCash::UserSiteURLType url_type : {PsiCash::UserSiteURLType::AccountSignup, PsiCash::UserSiteURLType::ForgotAccount, PsiCash::UserSiteURLType::AccountManagement}) {
             for (bool webview : {false, true}) {
                 for (string locale : {"", "en-US", "zh"}) {
                     PsiCashTester pc;
-                    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), nullptr, false, test);
+                    auto err = pc.Init(TestPsiCash::UserAgent(), GetTempDir().c_str(), HTTPRequester, false, test);
                     ASSERT_FALSE(err);
+
+                    auto res_refresh = pc.RefreshState(false, {"speed-boost"});
+                    ASSERT_TRUE(res_refresh) << res_refresh.error();
+                    ASSERT_EQ(res_refresh->status, Status::Success);
 
                     err = pc.SetLocale(locale);
                     ASSERT_FALSE(err);
@@ -1081,6 +1085,19 @@ TEST_F(TestPsiCash, GetUserSiteURL) {
                     }
 
                     ASSERT_THAT(url, HasSubstr("locale="+locale));
+
+                    ASSERT_THAT(url, Not(HasSubstr("username=")));
+
+                    // We're not going to log in to set the username, as it makes this test very slow (around a full minute)
+                    pc.user_data().SetAccountUsername(TEST_ACCOUNT_UNICODE_USERNAME);
+                    url = pc.GetUserSiteURL(url_type, webview);
+                    ASSERT_THAT(url, HasSubstr("username=%E1%88%88"));
+
+                    string too_long_username;
+                    too_long_username.resize(3000, 'x');
+                    pc.user_data().SetAccountUsername(too_long_username);
+                    url = pc.GetUserSiteURL(url_type, webview);
+                    ASSERT_THAT(url, Not(HasSubstr("username=")));
                 }
             }
         }

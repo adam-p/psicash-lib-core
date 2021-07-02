@@ -426,8 +426,18 @@ std::string PsiCash::GetUserSiteURL(UserSiteURLType url_type, bool webview) cons
         break;
     }
 
-    url.query_ = "utm_source=" + user_agent_;
-    url.query_ += "&locale=" + user_data_->GetLocale();
+    url.query_ = "utm_source=" + URL::Encode(user_agent_, false);
+    url.query_ += "&locale=" + URL::Encode(user_data_->GetLocale(), false);
+
+    if (!user_data_->GetAccountUsername().empty()) {
+        auto encoded_username = URL::Encode(user_data_->GetAccountUsername(), false);
+        // IE has a URL limit of 2083 characters, so if the username is too long (or encodes
+        // to too long), then we're going to omit this parameter). It is better to omit the
+        // username than to pre-fill an incorrect username or have broken UTF-8 characters.
+        if (encoded_username.length() < 2000) {
+            url.query_ += "&username=" + encoded_username;
+        }
+    }
 
     if (webview) {
         url.query_ += "&webview=true";
