@@ -1,33 +1,41 @@
-name: MSBuild
+name: Release Build
 
 on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
-
-env:
-  # Path to the solution file relative to the root of the project.
-  SOLUTION_FILE_PATH: .
-
-  # Configuration type to build.
-  # You can convert this to a build matrix if you need coverage of multiple configuration types.
-  # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
-  BUILD_CONFIGURATION: Release
+  release:
+    types: [published]
 
 permissions:
   contents: read
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2019
 
     steps:
     - uses: actions/checkout@v3
 
-    - name: Add MSBuild to PATH
-      uses: microsoft/setup-msbuild@v1.0.2
+    - uses: egor-tensin/vs-shell@v2
+      with:
+        arch: x86
 
-    - name: Restore NuGet packages
+    - name: Run build script
       working-directory: ${{env.GITHUB_WORKSPACE}}
-      run: dist-windows.bat
+      run: .\build-windows.bat
+
+    - name: Create zip
+      run: 7z a dist-windows.zip dist-windows
+
+    - name: Find release upload URL
+      run: |
+         Invoke-RestMethod https://api.github.com/repos/actions/checkout/releases/latest
+         echo UPLOAD_URL=$response.upload_url >> $GITHUB_ENV
+      shell: pwsh
+
+    - name: Attach Windows build to release
+      uses: actions/upload-release-asset@v1
+      id: upload-release-asset
+      with:
+        upload_url: ${{ env.UPLOAD_URL }}
+        asset_path: dist-windows.zip
+        asset_name: dist-windows.zip
+        asset_content_type: application/zip
